@@ -36,20 +36,21 @@ const state = {
     currentDateFilter: '', // 촬영 날짜 필터 추가 (YYYY-MM-DD)
     currentAngleFilter: 'all', // 각도 필터 추가
     isAnalysisPanelVisible: false, // 분석 패널이 보이는지 여부
-    isCompareModeActive: false, // 비교 모드 활성화 여부
+    isCompareSelectionActive: false, // 사진 선택 단계임을 나타내는 새로운 플래그
+    isComparingPhotos: false, // 실제로 2장/3장 비교 뷰가 활성화되어 드래그가 가능한 상태
     compareSelectionStep: 0, // 0: 선택 중 아님, 1: 두 번째 선택, 2: 세 번째 선택
     compareCount: 0, // 2 또는 3
     currentZoomLevel: 1.0, // 현재 확대 레벨 (1.0 = 원본 크기)
     zoomStep: 0.2, // 확대/축소 시 변화량
     maxZoom: 3.0, // 최대 확대 레벨
     minZoom: 0.5, // 최소 축소 레벨
-    isDragging: false, // 사진 드래그 중인지 여부
-    startX: 0, // 드래그 시작 시 마우스 X 좌표
-    startY: 0, // 드래그 시작 시 마우스 Y 좌표
-    currentTranslateX: 0, // 현재 X축 이동량
-    currentTranslateY: 0, // 현재 Y축 이동량
-    lastTranslateX: 0, // 마지막 이동량 (드래그 연속을 위해 필요)
-    lastTranslateY: 0, // 마지막 이동량 (드래그 연속을 위해 필요)
+    isDragging: false, // 사진 드래그 중인지 여부 (팬/줌용)
+    startX: 0, // 드래그 시작 시 마우스 X 좌표 (팬/줌용)
+    startY: 0, // 드래그 시작 시 마우스 Y 좌표 (팬/줌용)
+    currentTranslateX: 0, // 현재 X축 이동량 (팬/줌용)
+    currentTranslateY: 0, // 현재 Y축 이동량 (팬/줌용)
+    lastTranslateX: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
+    lastTranslateY: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
     stagedPhoto: null, // { url: string, mode: string, viewAngle: string, file: File | null } - 환자 미지정 상태의 사진
 };
 
@@ -94,7 +95,7 @@ function setupEventListeners() {
 
     // 촬영 날짜 필터 (새로 추가)
     document.getElementById('photoDateFilter').addEventListener('change', (e) => {
-        state.currentDateFilter = e.target.value; // YYYY-MM-DD 형식으로 저장
+        state.currentDateFilter = e.target.value; //InstrumentedTest-MM-DD 형식으로 저장
         fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
     });
 
@@ -460,23 +461,33 @@ async function selectPhoto(photoId) {
         return;
     }
 
-    if (state.isCompareModeActive) {
-        // Add to comparePhotoIds based on selection step
+    if (state.isCompareSelectionActive) { // If in the process of selecting photos for comparison
+        // Hide analysis panel if visible
+        state.isAnalysisPanelVisible = false;
+        document.getElementById('analysisPanel').classList.add('hidden');
+        document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
+        document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        clearAnalysis();
+
         if (state.compareSelectionStep === 1) {
             state.comparePhotoIds[1] = photoId; // Second photo
             if (state.compareCount === 2) {
-                // Done with 2 photos, maintain compare mode active for dragging
+                // Done with 2 photos, comparison ready
+                state.isCompareSelectionActive = false; // Selection complete
+                state.isComparingPhotos = true; // Now actively comparing
                 state.compareSelectionStep = 0; // Reset step as selection is complete
-                document.getElementById('compareBtn').innerText = '사진비교 해제'; // 버튼 텍스트 변경
+                document.getElementById('compareBtn').innerText = '사진비교 해제'; // Change button to cancel
             } else {
                 state.compareSelectionStep = 2; // Move to third photo selection
                 alert('비교할 세 번째 사진을 좌측 목록에서 선택해주세요.');
             }
         } else if (state.compareSelectionStep === 2) {
             state.comparePhotoIds[2] = photoId; // Third photo
-            // Done with 3 photos, maintain compare mode active for dragging
+            // Done with 3 photos, comparison ready
+            state.isCompareSelectionActive = false; // Selection complete
+            state.isComparingPhotos = true; // Now actively comparing
             state.compareSelectionStep = 0; // Reset step as selection is complete
-            document.getElementById('compareBtn').innerText = '사진비교 해제'; // 버튼 텍스트 변경
+            document.getElementById('compareBtn').innerText = '사진비교 해제'; // Change button to cancel
         }
         await updateComparisonDisplay(); // Update display with new comparison set
     } else {
@@ -485,13 +496,12 @@ async function selectPhoto(photoId) {
         state.secondaryPhotoId = null;
         state.tertiaryPhotoId = null;
         state.comparePhotoIds = [photoId]; // Set for single view
+        state.isCompareSelectionActive = false; // Ensure off
+        state.isComparingPhotos = false; // Ensure off
         state.compareSelectionStep = 0;
         state.compareCount = 0;
         await updateComparisonDisplay(); // Update display for single photo
-        // If coming from a state where compare was active but then went to single view,
-        // ensure the button text is back to '사진 비교'. This is handled by handleCompareButtonClick when comparison is canceled.
-        // But if a single photo is selected without explicitly canceling comparison,
-        // the button should also revert to its default state.
+        // Button text should revert to '사진 비교' if not in compare mode
         document.getElementById('compareBtn').innerText = '사진 비교';
         document.getElementById('compareBtn').classList.remove('bg-green-200');
     }
@@ -665,29 +675,37 @@ function handleCompareButtonClick() {
         return;
     }
 
-    if (state.isCompareModeActive) { // If currently in comparison selection mode, cancel it
-        state.isCompareModeActive = false;
+    if (state.isComparingPhotos) { // If currently in comparison display mode, clicking button cancels it
+        state.isComparingPhotos = false;
+        state.isCompareSelectionActive = false; // Also reset selection active flag
         state.compareSelectionStep = 0;
         state.compareCount = 0;
         document.getElementById('compareBtn').innerText = '사진 비교';
         document.getElementById('compareBtn').classList.remove('bg-green-200');
         
-        // Reset to single primary photo view if it exists, otherwise to placeholder
+        // Revert to single primary photo view if it exists, otherwise to placeholder
         if (state.primaryPhotoId) {
             state.comparePhotoIds = [state.primaryPhotoId];
-            updateComparisonDisplay();
+            updateComparisonDisplay(); // This will render single photo
         } else {
-            resetViewerToPlaceholder();
+            resetViewerToPlaceholder(); // This will clear everything
         }
         
-        // If analysis panel was visible, re-render analysis for the primary photo
+        // If analysis panel was visible, re-render analysis for the primary photo (if still selected)
         if (state.isAnalysisPanelVisible && state.primaryPhotoId) {
             getPhotoById(state.primaryPhotoId).then(photo => {
                 if (photo) renderAnalysis(photo);
             });
         }
-    } else { // Start comparison mode, show choice overlay
-        // 비교 선택 모달 표시
+    } else { // Not in comparison display mode, so initiate selection
+        // Hide analysis panel if visible
+        state.isAnalysisPanelVisible = false;
+        document.getElementById('analysisPanel').classList.add('hidden');
+        document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
+        document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        clearAnalysis();
+
+        // Show compare choice overlay
         document.getElementById('compareChoiceOverlay').classList.remove('hidden');
     }
 }
@@ -695,7 +713,8 @@ function handleCompareButtonClick() {
 // startCompareSelection: 비교할 사진 개수(2장 또는 3장)를 선택했을 때 실행됩니다.
 function startCompareSelection(count) {
     document.getElementById('compareChoiceOverlay').classList.add('hidden'); // 선택 팝업을 숨깁니다.
-    state.isCompareModeActive = true; // 비교 모드를 활성화합니다.
+    state.isCompareSelectionActive = true; // Set selection active
+    state.isComparingPhotos = false; // Ensure comparison display is off during selection
     state.compareCount = count; // 비교할 사진 개수를 저장합니다.
     state.compareSelectionStep = 1; // 두 번째 사진 선택 단계로 설정합니다.
 
@@ -706,7 +725,7 @@ function startCompareSelection(count) {
     document.getElementById('compareBtn').classList.add('bg-green-200'); // 버튼 색상을 변경하여 활성화 표시
     alert('비교할 두 번째 사진을 좌측 목록에서 선택하거나 PC/웹에서 불러와 선택해주세요.'); // 사용자에게 안내
 
-    // 비교 모드 진입 시 분석 패널 숨기기
+    // Hide analysis panel
     state.isAnalysisPanelVisible = false;
     document.getElementById('analysisPanel').classList.add('hidden');
     document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
@@ -796,6 +815,7 @@ async function updateComparisonDisplay() {
     viewerPhotoInfo.innerText = infoTexts.join(' vs ');
 
     resetZoomAndPan();
+    // In comparison mode, analysis panel is always hidden
     state.isAnalysisPanelVisible = false;
     document.getElementById('analysisPanel').classList.add('hidden');
     document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white');
@@ -960,11 +980,11 @@ function handleMouseUp() {
 
 // handleDragStart: 드래그 시작 시 호출
 function handleDragStart(e) {
-    console.log('Drag Start Event:', e.target.closest('.image-wrapper')?.id, 'isCompareModeActive:', state.isCompareModeActive, 'comparePhotoIds.length:', state.comparePhotoIds.length);
-    // 비교 모드 활성화 상태에서 2장 이상일 때만 드래그 허용
-    if (!state.isCompareModeActive || state.comparePhotoIds.length <= 1) {
+    console.log('Drag Start Event:', e.target.closest('.image-wrapper')?.id, 'isComparingPhotos:', state.isComparingPhotos, 'comparePhotoIds.length:', state.comparePhotoIds.length);
+    // Allow dragging only when actively comparing photos (2 or 3 are displayed)
+    if (!state.isComparingPhotos || state.comparePhotoIds.length <= 1) { // Changed from isCompareModeActive
         e.preventDefault(); 
-        console.log('Drag prevented: Not in compare mode or less than 2 photos.');
+        console.log('Drag prevented: Not actively comparing or less than 2 photos.');
         return;
     }
 
@@ -1105,7 +1125,7 @@ async function handleLocalFileSelect(event) {
         photoMode = parts[2]; // 세 번째 파트: 촬영모드
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
-        if (datePart.length === 8 && !isNaN(datePart)) { // YYYYMMDD 형식 확인
+        if (datePart.length === 8 && !isNaN(datePart)) { //InstrumentedTestMMDD 형식 확인
             photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
     } else {
@@ -1291,10 +1311,10 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
         if (sourceType === 'local') {
             // 로컬 파일은 임시 URL을 사용합니다.
             imageUrlToDisplay = URL.createObjectURL(source);
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData }; // date 및 ai_analysis 추가
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData };
         } else if (sourceType === 'web') {
             imageUrlToDisplay = source;
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData }; // date 및 ai_analysis 추가
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData };
         }
         
         state.primaryPhotoId = null; // stagedPhoto는 아직 Firestore ID가 없음
