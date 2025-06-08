@@ -51,19 +51,6 @@ const state = {
     lastTranslateX: 0, // 마지막 이동량 (드래그 연속을 위해 필요)
     lastTranslateY: 0, // 마지막 이동량 (드래그 연속을 위해 필요)
     stagedPhoto: null, // { url: string, mode: string, viewAngle: string, file: File | null } - 환자 미지정 상태의 사진
-
-    // 그리기 및 메모 기능 관련 상태
-    drawingCanvas: null,
-    drawingCtx: null,
-    isDrawing: false,
-    lastX: 0, // 캔버스 좌표계 기준 마지막 X 좌표 (픽셀)
-    lastY: 0, // 캔버스 좌표계 기준 마지막 Y 좌표 (픽셀)
-    drawingTool: 'pen', // 'pen', 'eraser', 'memo', 'angle'
-    drawingColor: '#FF0000', // 기본 펜 색상
-    drawingStrokeWidth: 3, // 기본 선 굵기
-    annotations: [], // 주석 데이터 저장 배열. 각 요소는 { type: 'line', points: [{x,y},...], color, width } 또는 { type: 'text', x, y, text, color, fontSize } 또는 { type: 'angle', p1: {x,y}, p2: {x,y}, angle, color, width }
-    currentMemoPos: null, // 메모를 추가할 캔버스 좌표 { x, y }
-    anglePoints: [], // 각도 측정 시 클릭한 두 점을 저장. [{x,y}, {x,y}]
 };
 
 // DOMContentLoaded: 웹 페이지의 모든 HTML이 로드되면 실행되는 부분입니다.
@@ -74,13 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('fetchPatients 함수 호출 시작 (DOMContentLoaded).'); // 디버깅 로그 추가
     fetchPatients(); 
     setupEventListeners(); // 버튼 클릭, 마우스 움직임 등의 이벤트를 설정합니다.
-
-    // 그리기 캔버스 초기화
-    state.drawingCanvas = document.getElementById('drawingCanvas');
-    state.drawingCtx = state.drawingCanvas.getContext('2d');
-    // 초기에는 그리기 캔버스의 포인터 이벤트를 비활성화하여 이미지 팬/줌이 가능하게 합니다.
-    // 그리기 도구 활성화 시 다시 활성화됩니다.
-    state.drawingCanvas.style.pointerEvents = 'none'; 
 });
 
 // setupEventListeners: 웹사이트의 각종 버튼과 마우스 이벤트들을 연결합니다.
@@ -114,7 +94,7 @@ function setupEventListeners() {
 
     // 촬영 날짜 필터 (새로 추가)
     document.getElementById('photoDateFilter').addEventListener('change', (e) => {
-        state.currentDateFilter = e.target.value; //InstrumentedTest-MM-DD 형식으로 저장
+        state.currentDateFilter = e.target.value; // YYYY-MM-DD 형식으로 저장
         fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
     });
 
@@ -139,41 +119,6 @@ function setupEventListeners() {
             alert('삭제할 사진이 선택되지 않았습니다.');
         }
     });
-
-    // 그리기 도구 버튼
-    document.getElementById('drawingToolsBtn').addEventListener('click', toggleDrawingPanel);
-
-    // 그리기 도구 패널 내부 버튼
-    document.getElementById('penToolBtn').addEventListener('click', () => setDrawingTool('pen'));
-    document.getElementById('eraserToolBtn').addEventListener('click', () => setDrawingTool('eraser'));
-    document.getElementById('memoToolBtn').addEventListener('click', () => setDrawingTool('memo'));
-    document.getElementById('angleToolBtn').addEventListener('click', () => setDrawingTool('angle'));
-    document.getElementById('drawingColor').addEventListener('input', (e) => {
-        state.drawingColor = e.target.value;
-        // 펜 도구 활성화 시, 색상 변경 시 active-tool-btn 스타일 업데이트
-        if (state.drawingTool === 'pen') {
-            document.getElementById('penToolBtn').style.backgroundColor = state.drawingColor;
-        }
-        state.drawingCtx.strokeStyle = state.drawingColor; // 캔버스 컨텍스트에도 적용
-        state.drawingCtx.fillStyle = state.drawingColor;
-    });
-    document.getElementById('drawingStrokeWidth').addEventListener('input', (e) => {
-        state.drawingStrokeWidth = parseInt(e.target.value, 10);
-        state.drawingCtx.lineWidth = state.drawingStrokeWidth; // 캔버스 컨텍스트에도 적용
-    });
-    document.getElementById('clearDrawingBtn').addEventListener('click', clearDrawing);
-    document.getElementById('saveAnnotationsBtn').addEventListener('click', saveAnnotations);
-    document.getElementById('closeDrawingPanelBtn').addEventListener('click', toggleDrawingPanel);
-
-
-    // 메모 입력 오버레이 버튼
-    document.getElementById('cancelMemoBtn').addEventListener('click', () => {
-        document.getElementById('memoInputOverlay').classList.add('hidden');
-        document.getElementById('memoTextInput').value = '';
-        state.currentMemoPos = null;
-    });
-    document.getElementById('saveMemoBtn').addEventListener('click', saveMemo);
-
 
     // 비교 사진 선택 팝업의 버튼에 이벤트를 연결합니다.
     document.getElementById('choose2PhotosBtn').addEventListener('click', () => startCompareSelection(2)); // 2장 비교 선택
@@ -225,12 +170,6 @@ function setupEventListeners() {
         wrapper.addEventListener('drop', handleDrop);
         wrapper.addEventListener('dragend', handleDragEnd); // 드래그 종료 시 호출
     });
-
-    // 그리기 캔버스 이벤트 리스너 (그리기 도구 활성화 시에만 작동)
-    state.drawingCanvas.addEventListener('mousedown', startDrawing);
-    state.drawingCanvas.addEventListener('mousemove', draw);
-    state.drawingCanvas.addEventListener('mouseup', endDrawing);
-    state.drawingCanvas.addEventListener('mouseout', endDrawing); // 캔버스 밖으로 마우스가 나갈 때 그리기 종료
 }
 
 // Helper function to get photo data by ID (can be optimized with a cache if needed)
@@ -493,7 +432,7 @@ function renderPhotoList(photos) {
 
         // 사진 썸네일과 정보를 li 안에 넣어줍니다.
         li.innerHTML = `
-            <img src="${photo.url}" alt="${photo.mode}" class="w-16 h-16 object-cover rounded-md bg-gray-300">
+            <img src="${photo.url}" alt="${photo.mode}" class="w-16 h-16 object-cover rounded-md mb-2">
             <div>
                 <p class="font-medium text-sm">${photo.mode} (${photo.viewAngle})</p>
                 <p class="text-xs text-gray-500">${photo.date}</p>
@@ -520,18 +459,6 @@ async function selectPhoto(photoId) {
         alert("선택된 사진 정보를 찾을 수 없습니다.");
         return;
     }
-
-    // 주석 데이터 불러오기 및 파싱
-    state.annotations = []; // 기존 주석 초기화
-    if (photo.annotations) {
-        try {
-            state.annotations = JSON.parse(photo.annotations);
-        } catch (e) {
-            console.error("Failed to parse annotations:", e);
-            state.annotations = []; // 파싱 실패 시 빈 배열로 초기화
-        }
-    }
-
 
     if (state.isCompareModeActive) {
         // Add to comparePhotoIds based on selection step
@@ -568,27 +495,6 @@ async function selectPhoto(photoId) {
         document.getElementById('compareBtn').innerText = '사진 비교';
         document.getElementById('compareBtn').classList.remove('bg-green-200');
     }
-    
-    // 그리기 캔버스 크기 및 초기화
-    const mainImage = document.getElementById('mainImage');
-    mainImage.onload = () => {
-        // 이미지의 자연 해상도를 캔버스의 내부 해상도로 설정합니다.
-        state.drawingCanvas.width = mainImage.naturalWidth;
-        state.drawingCanvas.height = mainImage.naturalHeight;
-        console.log(`그리기 캔버스 크기 설정됨: ${state.drawingCanvas.width}x${state.drawingCanvas.height}`);
-        
-        // 이미지 로드 후 주석 다시 그리기
-        redrawAnnotations();
-    };
-    // 이미지가 이미 로드되어 있는 경우를 대비 (onload 이벤트가 발생하지 않을 수 있음)
-    if (mainImage.complete && mainImage.naturalWidth > 0 && mainImage.naturalHeight > 0) {
-        state.drawingCanvas.width = mainImage.naturalWidth;
-        state.drawingCanvas.height = mainImage.naturalHeight;
-        console.log(`그리기 캔버스 크기 설정됨 (이미 완료됨): ${state.drawingCanvas.width}x${state.drawingCanvas.height}`);
-        redrawAnnotations();
-    }
-
-
     fetchPhotos(state.selectedPatientId); // Refresh photo list to show selected items
 }
 
@@ -605,12 +511,6 @@ function toggleAnalysisPanel() {
         panel.classList.remove('hidden'); // 패널을 보입니다.
         btn.classList.add('bg-[#4CAF50]', 'text-white'); // 버튼 색상을 변경하여 활성화 상태를 표시합니다.
         
-        // AI 분석 패널 활성화 시 그리기 도구 패널 숨기기
-        document.getElementById('drawingToolsPanel').classList.add('hidden');
-        document.getElementById('drawingToolsBtn').classList.remove('bg-[#4CAF50]', 'text-white');
-        document.getElementById('drawingToolsBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-        state.drawingCanvas.style.pointerEvents = 'none'; // 그리기 캔버스 비활성화
-
         if (state.primaryPhotoId) {
             getDoc(doc(db, 'photos', state.primaryPhotoId))
                 .then(snapshot => {
@@ -662,10 +562,6 @@ function renderAnalysis(photo) {
     const render = () => {
         canvas.width = img.naturalWidth; // 캔버스 내부 해상도를 이미지 원본 해상도에 맞춤
         canvas.height = img.naturalHeight;
-        
-        // CSS 크기는 이미지의 현재 표시 크기에 맞춤 (applyTransforms에서 처리)
-        // 캔버스의 실제 표시 크기는 CSS로 조정될 것이므로, 그리기 시 비율을 계산해야 합니다.
-        // 하지만 여기서는 이미 naturalWidth/Height를 사용하므로, 비율 조정 없이 바로 그립니다.
         
         ctx.clearRect(0, 0, canvas.width, canvas.height); // 기존 그림을 지웁니다.
         let html = '';
@@ -761,331 +657,6 @@ function clearAnalysis() {
     document.getElementById('analysisContent').innerHTML = ''; // 분석 패널 내용을 비웁니다.
 }
 
-// 그리기 도구 패널 토글
-function toggleDrawingPanel() {
-    const panel = document.getElementById('drawingToolsPanel');
-    const btn = document.getElementById('drawingToolsBtn');
-    
-    if (panel.classList.contains('hidden')) {
-        // 패널 보이기
-        panel.classList.remove('hidden');
-        btn.classList.add('bg-[#4CAF50]', 'text-white');
-        
-        // 그리기 도구 활성화 시 AI 분석 패널 숨기기
-        document.getElementById('analysisPanel').classList.add('hidden');
-        document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white');
-        document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-        clearAnalysis(); // AI 분석 내용 초기화
-        
-        // 그리기 캔버스 포인터 이벤트 활성화 (그리기 가능)
-        state.drawingCanvas.style.pointerEvents = 'auto';
-        // 초기 펜 도구로 설정 및 스타일 업데이트
-        setDrawingTool('pen'); 
-
-        // 현재 선택된 사진이 없다면 경고
-        if (!state.primaryPhotoId) {
-            alert('그림을 그리려면 먼저 사진을 선택해주세요.');
-        }
-        // 비교 모드라면 경고
-        if (state.isCompareModeActive) {
-            alert('비교 모드에서는 그릴 수 없습니다. 비교 모드를 해제해주세요.');
-        }
-
-    } else {
-        // 패널 숨기기
-        panel.classList.add('hidden');
-        btn.classList.remove('bg-[#4CAF50]', 'text-white');
-        btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-        // 그리기 캔버스 포인터 이벤트 비활성화 (이미지 팬/줌 가능)
-        state.drawingCanvas.style.pointerEvents = 'none';
-        // 각도 측정 중이었다면 초기화
-        state.anglePoints = [];
-    }
-}
-
-// 그리기 도구 설정 (펜, 지우개, 메모, 각도)
-function setDrawingTool(tool) {
-    state.drawingTool = tool;
-    console.log('그리기 도구 설정됨:', tool);
-    // 모든 도구 버튼의 활성화 스타일 초기화
-    document.querySelectorAll('#drawingToolsPanel button[data-tool]').forEach(btn => {
-        btn.classList.remove('active-tool-btn', 'bg-[#4CAF50]', 'text-white');
-        btn.classList.add('bg-gray-200', 'text-gray-700');
-    });
-
-    // 선택된 도구 버튼 활성화 스타일 적용
-    const activeBtn = document.querySelector(`#drawingToolsPanel button[data-tool="${tool}"]`);
-    if (activeBtn) {
-        activeBtn.classList.add('active-tool-btn', 'bg-[#4CAF50]', 'text-white');
-        activeBtn.classList.remove('bg-gray-200', 'text-gray-700');
-        // 펜 도구의 경우 색상 반영
-        if (tool === 'pen') {
-            activeBtn.style.backgroundColor = state.drawingColor;
-        } else {
-            activeBtn.style.backgroundColor = ''; // 다른 도구는 기본 배경색
-        }
-    }
-
-    // 캔버스 커서 업데이트
-    state.drawingCanvas.style.cursor = (tool === 'pen' || tool === 'eraser' || tool === 'angle') ? 'crosshair' : 'default';
-    
-    // 각도 측정 초기화
-    state.anglePoints = [];
-}
-
-// 그리기 시작
-function startDrawing(e) {
-    if (!state.primaryPhotoId || state.isCompareModeActive) { 
-        // 사진이 선택되지 않았거나 비교 모드라면 그리기 불가
-        console.log('그리기 시작 불가: 사진 미선택 또는 비교 모드');
-        return;
-    }
-    
-    const { x, y } = getCanvasCoordinates(e); // 캔버스 내부 좌표를 가져옵니다.
-
-    if (state.drawingTool === 'memo') {
-        state.currentMemoPos = { x, y };
-        document.getElementById('memoInputOverlay').classList.remove('hidden');
-        document.getElementById('memoTextInput').focus();
-    } else if (state.drawingTool === 'angle') {
-        state.anglePoints.push({ x, y });
-        if (state.anglePoints.length === 2) {
-            // 두 점이 모두 찍혔으면 각도 계산 및 그리기
-            const p1 = state.anglePoints[0];
-            const p2 = state.anglePoints[1];
-            const angleRad = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-            let angleDeg = angleRad * 180 / Math.PI;
-            angleDeg = (angleDeg < 0) ? (angleDeg + 360) : angleDeg; // 0-360도 범위
-
-            state.annotations.push({
-                type: 'angle',
-                p1: normalizeCoordinates(p1),
-                p2: normalizeCoordinates(p2),
-                angle: parseFloat(angleDeg.toFixed(2)), // 소수점 2자리까지 저장
-                color: state.drawingColor,
-                width: state.drawingStrokeWidth,
-                fontSize: 16 // 각도 텍스트 폰트 크기
-            });
-            redrawAnnotations();
-            state.anglePoints = []; // 각도 측정 초기화
-        }
-    } else {
-        state.isDrawing = true;
-        state.lastX = x;
-        state.lastY = y;
-        // 새로운 경로 시작
-        if (state.drawingTool === 'pen') {
-            state.annotations.push({
-                type: 'line',
-                points: [normalizeCoordinates({ x, y })], // 첫 점 저장
-                color: state.drawingColor,
-                width: state.drawingStrokeWidth
-            });
-        } else if (state.drawingTool === 'eraser') {
-            state.annotations.push({
-                type: 'erase',
-                points: [normalizeCoordinates({ x, y })], // 첫 점 저장
-                width: state.drawingStrokeWidth * 3 // 지우개는 펜보다 굵게
-            });
-        }
-    }
-}
-
-// 그리기 (마우스 이동 시)
-function draw(e) {
-    if (!state.isDrawing) return;
-    if (!state.primaryPhotoId || state.isCompareModeActive) return; // 다시 한 번 확인
-
-    const { x, y } = getCanvasCoordinates(e); // 현재 캔버스 내부 좌표
-    const currentAnnotation = state.annotations[state.annotations.length - 1];
-
-    if (state.drawingTool === 'pen') {
-        state.drawingCtx.strokeStyle = state.drawingColor;
-        state.drawingCtx.lineWidth = state.drawingStrokeWidth;
-        state.drawingCtx.lineCap = 'round';
-        state.drawingCtx.beginPath();
-        state.drawingCtx.moveTo(state.lastX, state.lastY);
-        state.drawingCtx.lineTo(x, y);
-        state.drawingCtx.stroke();
-        
-        currentAnnotation.points.push(normalizeCoordinates({ x, y })); // 경로에 점 추가
-
-    } else if (state.drawingTool === 'eraser') {
-        // 지우개는 실제 픽셀을 지우는 clearRect를 사용
-        state.drawingCtx.clearRect(x - state.drawingStrokeWidth * 1.5, y - state.drawingStrokeWidth * 1.5, state.drawingStrokeWidth * 3, state.drawingStrokeWidth * 3);
-        // 지우개 흔적도 annotation으로 저장하여 저장 후 불러올 때도 동일하게 지워진 것처럼 보이게 할 수 있으나,
-        // 현재는 단순성을 위해 clearRect를 사용하여 실제 캔버스 픽셀을 수정합니다.
-        // 따라서 저장 후 불러올 때 '지워진 상태'를 복원하려면 캔버스 픽셀 데이터를 저장하는 복잡한 방식이 필요합니다.
-        // 현재 구현에서는 지우개는 임시적인 작업으로 간주됩니다.
-        // 만약 '지우개 이력'을 저장하려면, 캔버스 상태를 스냅샷으로 저장하거나
-        // 각 지우개 동작을 역으로 추적할 수 있는 다른 방식으로 설계해야 합니다.
-        // 현재는 지우개 동작은 저장되지 않습니다.
-    }
-
-    state.lastX = x;
-    state.lastY = y;
-}
-
-// 그리기 종료
-function endDrawing() {
-    state.isDrawing = false;
-    state.drawingCtx.beginPath(); // 현재 경로 닫기 (새로운 그리기 시작을 위해)
-}
-
-// 메모 저장
-function saveMemo() {
-    const memoText = document.getElementById('memoTextInput').value;
-    if (memoText && state.currentMemoPos) {
-        state.annotations.push({
-            type: 'text',
-            text: memoText,
-            x: normalizeCoordinates(state.currentMemoPos).x,
-            y: normalizeCoordinates(state.currentMemoPos).y,
-            color: state.drawingColor,
-            fontSize: 20 // 기본 폰트 크기
-        });
-        redrawAnnotations();
-    }
-    document.getElementById('memoInputOverlay').classList.add('hidden');
-    document.getElementById('memoTextInput').value = '';
-    state.currentMemoPos = null;
-    setDrawingTool('pen'); // 메모 저장 후 펜 도구로 전환
-}
-
-
-// 캔버스 좌표를 이미지 자연 해상도 기준으로 변환
-function getCanvasCoordinates(e) {
-    const rect = state.drawingCanvas.getBoundingClientRect();
-    const mainImage = document.getElementById('mainImage');
-
-    // 이미지가 현재 표시되는 실제 크기와 원본 크기 간의 비율을 계산
-    // 캔버스의 내부 해상도는 이미지의 naturalWidth/Height를 따르므로,
-    // 마우스 이벤트 좌표를 캔버스 내부의 "픽셀" 좌표로 변환해야 합니다.
-    const displayedWidth = mainImage.clientWidth * state.currentZoomLevel;
-    const displayedHeight = mainImage.clientHeight * state.currentZoomLevel;
-
-    // 이미지가 container 중앙에 위치할 때의 offset 고려
-    const offsetX = (rect.width - displayedWidth) / 2;
-    const offsetY = (rect.height - displayedHeight) / 2;
-
-    const xInDisplayedImage = e.clientX - rect.left - offsetX - state.currentTranslateX;
-    const yInDisplayedImage = e.clientY - rect.top - offsetY - state.currentTranslateY;
-
-    // 캔버스 내부의 실제 픽셀 좌표
-    const x = (xInDisplayedImage / displayedWidth) * mainImage.naturalWidth;
-    const y = (yInDisplayedImage / displayedHeight) * mainImage.naturalHeight;
-    
-    return { x, y };
-}
-
-// 좌표를 0-1 사이의 비율로 정규화 (저장용)
-function normalizeCoordinates(coords) {
-    if (!state.drawingCanvas || state.drawingCanvas.width === 0 || state.drawingCanvas.height === 0) {
-        console.warn("캔버스 크기가 0입니다. 좌표 정규화 실패.");
-        return coords; // 또는 오류 처리
-    }
-    return {
-        x: coords.x / state.drawingCanvas.width,
-        y: coords.y / state.drawingCanvas.height
-    };
-}
-
-// 정규화된 좌표를 현재 캔버스 크기에 맞춰 픽셀 좌표로 변환 (그리기용)
-function denormalizeCoordinates(coords) {
-    if (!state.drawingCanvas || state.drawingCanvas.width === 0 || state.drawingCanvas.height === 0) {
-        // 캔버스가 초기화되지 않았거나 크기가 0이면 유효하지 않은 좌표 반환
-        console.warn("denormalizeCoordinates: 캔버스 크기가 0입니다. 좌표 변환 실패.");
-        return { x: 0, y: 0 }; 
-    }
-    return {
-        x: coords.x * state.drawingCanvas.width,
-        y: coords.y * state.drawingCanvas.height
-    };
-}
-
-// 모든 주석 다시 그리기
-function redrawAnnotations() {
-    if (!state.drawingCtx || !state.drawingCanvas) return;
-
-    state.drawingCtx.clearRect(0, 0, state.drawingCanvas.width, state.drawingCanvas.height); // 전체 캔버스 지우기
-
-    state.annotations.forEach(annotation => {
-        if (annotation.type === 'line') {
-            state.drawingCtx.strokeStyle = annotation.color;
-            state.drawingCtx.lineWidth = annotation.width;
-            state.drawingCtx.lineCap = 'round';
-            state.drawingCtx.beginPath();
-            
-            annotation.points.forEach((point, index) => {
-                const { x, y } = denormalizeCoordinates(point);
-                if (index === 0) {
-                    state.drawingCtx.moveTo(x, y);
-                } else {
-                    state.drawingCtx.lineTo(x, y);
-                }
-            });
-            state.drawingCtx.stroke();
-        } else if (annotation.type === 'text') {
-            state.drawingCtx.fillStyle = annotation.color;
-            state.drawingCtx.font = `${annotation.fontSize}px Inter`; // 폰트 설정. Inter 폰트 사용
-            const { x, y } = denormalizeCoordinates({x: annotation.x, y: annotation.y});
-            state.drawingCtx.fillText(annotation.text, x, y);
-        } else if (annotation.type === 'angle') {
-            const p1 = denormalizeCoordinates(annotation.p1);
-            const p2 = denormalizeCoordinates(annotation.p2);
-
-            state.drawingCtx.strokeStyle = annotation.color;
-            state.drawingCtx.lineWidth = annotation.width;
-            state.drawingCtx.beginPath();
-            state.drawingCtx.moveTo(p1.x, p1.y);
-            state.drawingCtx.lineTo(p2.x, p2.y);
-            state.drawingCtx.stroke();
-
-            // 각도 텍스트 표시
-            state.drawingCtx.fillStyle = annotation.color;
-            state.drawingCtx.font = `${annotation.fontSize || 16}px Inter`; // Inter 폰트 사용
-            const midX = (p1.x + p2.x) / 2;
-            const midY = (p1.y + p2.y) / 2;
-            state.drawingCtx.fillText(`${annotation.angle}°`, midX + 10, midY - 10);
-        } else if (annotation.type === 'erase') {
-             // 'erase' 타입은 캔버스 픽셀을 직접 지우는 방식이므로, 저장 후 재그림 시 복원되지 않습니다.
-             // 이 기능을 저장 후 복원하려면 캔버스 픽셀 데이터를 저장하거나,
-             // 각 지우개 동작을 추적하여 다시 그리는 로직이 필요합니다 (현재 구현 범위 외).
-             // 따라서 여기서는 아무것도 그리지 않습니다.
-        }
-    });
-}
-
-// 모든 그리기 및 메모 지우기
-function clearDrawing() {
-    if (!confirm('그려진 모든 내용과 메모를 지우시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-        return;
-    }
-    state.annotations = []; // 주석 배열 초기화
-    redrawAnnotations(); // 캔버스 다시 그려서 모든 내용 지우기
-}
-
-// 주석을 Firestore에 저장
-async function saveAnnotations() {
-    if (!state.primaryPhotoId) {
-        alert('주석을 저장할 사진이 선택되지 않았습니다.');
-        return;
-    }
-    try {
-        const photoRef = doc(db, 'photos', state.primaryPhotoId);
-        // 저장 시, 주석 배열을 Stringify하여 Firestore의 배열 제한을 피하고 단일 문자열로 저장
-        // 불러올 때는 JSON.parse()로 다시 객체 배열로 변환합니다.
-        await updateDoc(photoRef, {
-            annotations: JSON.stringify(state.annotations) 
-        });
-        alert('주석이 성공적으로 저장되었습니다!');
-    } catch (error) {
-        console.error("주석 저장 중 오류 발생:", error);
-        alert("주석 저장에 실패했습니다. 오류: " + error.message);
-    }
-}
-
-
 // handleCompareButtonClick: '사진 비교' 버튼 클릭 시 실행됩니다.
 function handleCompareButtonClick() {
     // Check if there's at least one photo selected to start comparison
@@ -1116,13 +687,6 @@ function handleCompareButtonClick() {
             });
         }
     } else { // Start comparison mode, show choice overlay
-        // 비교 모드 시작 시 그리기 도구 패널 숨기기
-        document.getElementById('drawingToolsPanel').classList.add('hidden');
-        document.getElementById('drawingToolsBtn').classList.remove('bg-[#4CAF50]', 'text-white');
-        document.getElementById('drawingToolsBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-        state.drawingCanvas.style.pointerEvents = 'none'; // 그리기 캔버스 비활성화
-        clearDrawing(); // 그리기 내용 초기화
-
         // 비교 선택 모달 표시
         document.getElementById('compareChoiceOverlay').classList.remove('hidden');
     }
@@ -1142,18 +706,12 @@ function startCompareSelection(count) {
     document.getElementById('compareBtn').classList.add('bg-green-200'); // 버튼 색상을 변경하여 활성화 표시
     alert('비교할 두 번째 사진을 좌측 목록에서 선택하거나 PC/웹에서 불러와 선택해주세요.'); // 사용자에게 안내
 
-    // 비교 모드 진입 시 분석 패널 및 그리기 도구 패널 숨기기
+    // 비교 모드 진입 시 분석 패널 숨기기
     state.isAnalysisPanelVisible = false;
     document.getElementById('analysisPanel').classList.add('hidden');
     document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
     document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
     clearAnalysis();
-
-    document.getElementById('drawingToolsPanel').classList.add('hidden');
-    document.getElementById('drawingToolsBtn').classList.remove('bg-[#4CAF50]', 'text-white');
-    document.getElementById('drawingToolsBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-    state.drawingCanvas.style.pointerEvents = 'none'; // 그리기 캔버스 비활성화
-    clearDrawing(); // 그리기 내용 초기화
 
     resetZoomAndPan(); // 확대/이동 상태 초기화
     updateComparisonDisplay(); // Initial display for compare selection
@@ -1243,13 +801,6 @@ async function updateComparisonDisplay() {
     document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white');
     document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
     clearAnalysis();
-
-    // 비교 뷰에서는 그리기 캔버스 비활성화
-    state.drawingCanvas.style.pointerEvents = 'none';
-    document.getElementById('drawingToolsPanel').classList.add('hidden');
-    document.getElementById('drawingToolsBtn').classList.remove('bg-[#4CAF50]', 'text-white');
-    document.getElementById('drawingToolsBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-    clearDrawing(); // 그리기 내용 초기화
 }
 
 // resetComparisonView function will be simplified, as updateComparisonDisplay handles most of it.
@@ -1291,8 +842,6 @@ function toggleFullScreen() {
             if (photo) renderAnalysis(photo);
         });
     }
-    // 그리기 캔버스도 화면 크기에 맞춰 재조정
-    redrawAnnotations();
     resetZoomAndPan(); 
 }
 
@@ -1300,7 +849,6 @@ function toggleFullScreen() {
 function applyTransforms() {
     const images = [document.getElementById('mainImage'), document.getElementById('compareImage'), document.getElementById('tertiaryImage')];
     const analysisCanvas = document.getElementById('analysisCanvas');
-    const drawingCanvas = document.getElementById('drawingCanvas');
 
     // 각 이미지에 변환을 적용합니다.
     images.forEach(img => {
@@ -1327,12 +875,6 @@ function applyTransforms() {
          analysisCanvas.style.width = `${mainImageRect.width}px`; // 실제 보이는 크기
          analysisCanvas.style.height = `${mainImageRect.height}px`;
 
-         drawingCanvas.style.left = `${canvasX}px`;
-         drawingCanvas.style.top = `${canvasY}px`;
-         drawingCanvas.style.transform = `scale(${state.currentZoomLevel})`;
-         drawingCanvas.style.width = `${mainImageRect.width}px`; // 실제 보이는 크기
-         drawingCanvas.style.height = `${mainImageRect.height}px`;
-
     } else {
         // 메인 이미지가 보이지 않으면 캔버스를 숨기고 초기화합니다.
         analysisCanvas.style.left = '0px';
@@ -1340,12 +882,6 @@ function applyTransforms() {
         analysisCanvas.style.transform = 'scale(1.0)';
         analysisCanvas.style.width = '0px';
         analysisCanvas.style.height = '0px';
-        
-        drawingCanvas.style.left = '0px';
-        drawingCanvas.style.top = '0px';
-        drawingCanvas.style.transform = 'scale(1.0)';
-        drawingCanvas.style.width = '0px';
-        drawingCanvas.style.height = '0px';
     }
 }
 
@@ -1364,8 +900,6 @@ function zoomImage(step) {
             if (photo) renderAnalysis(photo);
         });
     }
-    // 그리기 주석도 다시 그립니다.
-    redrawAnnotations();
 }
 
 // resetZoomAndPan: 확대/이동 상태를 초기화합니다.
@@ -1376,7 +910,6 @@ function resetZoomAndPan() {
     state.lastTranslateX = 0;
     state.lastTranslateY = 0;
     applyTransforms(); 
-    redrawAnnotations(); // 그리기 내용도 다시 그립니다.
 }
 
 // handleMouseWheelZoom: 마우스 휠 이벤트로 확대/축소를 처리합니다.
@@ -1388,14 +921,13 @@ function handleMouseWheelZoom(e) {
 
 // handleMouseDown: 마우스 클릭 시 드래그 시작을 처리합니다.
 function handleMouseDown(e) {
-    // 그리기 도구가 활성화되지 않았을 때만 팬/줌 드래그 허용
-    if (state.drawingCanvas.style.pointerEvents === 'none' && e.button === 0 && state.currentZoomLevel > 1.0) { 
+    if (e.button === 0 && state.currentZoomLevel > 1.0) { 
         state.isDragging = true;
         state.startX = e.clientX; 
         state.startY = e.clientY; 
         state.lastTranslateX = state.currentTranslateX; 
         state.lastTranslateY = state.currentTranslateY;
-        document.getElementById('mainImage').classList.add('cursor-grabbing'); // 커서 변경
+        document.getElementById('image-container').classList.add('cursor-grabbing'); // 커서 변경
         
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
@@ -1419,7 +951,7 @@ function handleMouseMove(e) {
 // handleMouseUp: 마우스 버튼을 뗄 때 드래그 종료를 처리합니다.
 function handleMouseUp() {
     state.isDragging = false; 
-    document.getElementById('mainImage').classList.remove('cursor-grabbing'); // 커서 원래대로
+    document.getElementById('image-container').classList.remove('cursor-grabbing'); // 커서 원래대로
     
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
@@ -1573,7 +1105,7 @@ async function handleLocalFileSelect(event) {
         photoMode = parts[2]; // 세 번째 파트: 촬영모드
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
-        if (datePart.length === 8 && !isNaN(datePart)) { //InstrumentedTestMMDD 형식 확인
+        if (datePart.length === 8 && !isNaN(datePart)) { // YYYYMMDD 형식 확인
             photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
     } else {
@@ -1698,6 +1230,7 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
 
         if (sourceType === 'local') {
             const file = source;
+            // 파일 이름을 고유하게 만들기 위해 타임스탬프 추가
             const storageRef = ref(storage, `photos/${patientId}/${file.name}_${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             imageUrlToDisplay = await getDownloadURL(snapshot.ref);
@@ -1716,7 +1249,6 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
             date: photoDate, // 파싱된 photoDate 사용
             uploadedAt: new Date(),
             ai_analysis: aiAnalysisData, // AI 분석 데이터 포함
-            annotations: JSON.stringify([]) // 주석 필드 초기화 (빈 배열을 JSON 문자열로)
         };
         const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
         state.primaryPhotoId = docRef.id; // Firestore 문서 ID를 primaryPhotoId로 사용
@@ -1759,10 +1291,10 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
         if (sourceType === 'local') {
             // 로컬 파일은 임시 URL을 사용합니다.
             imageUrlToDisplay = URL.createObjectURL(source);
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData, annotations: [] }; // date 및 ai_analysis, annotations 추가
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData }; // date 및 ai_analysis 추가
         } else if (sourceType === 'web') {
             imageUrlToDisplay = source;
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData, annotations: [] }; // date 및 ai_analysis, annotations 추가
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData }; // date 및 ai_analysis 추가
         }
         
         state.primaryPhotoId = null; // stagedPhoto는 아직 Firestore ID가 없음
@@ -1790,23 +1322,6 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
 
         viewerPatientName.innerText = `환자 미지정 - 선택 필요`;
         viewerPhotoInfo.innerText = `${photoDate} | ${photoMode} | ${viewAngle}`;
-
-        // 그리기 캔버스 크기 및 초기화
-        mainImage.onload = () => {
-            state.drawingCanvas.width = mainImage.naturalWidth;
-            state.drawingCanvas.height = mainImage.naturalHeight;
-            console.log(`그리기 캔버스 크기 설정됨: ${state.drawingCanvas.width}x${state.drawingCanvas.height}`);
-            state.annotations = state.stagedPhoto.annotations || [];
-            redrawAnnotations();
-        };
-        // 이미 로드된 경우 (onload 이벤트가 발생하지 않을 수 있음)
-        if (mainImage.complete && mainImage.naturalWidth > 0 && mainImage.naturalHeight > 0) { 
-            state.drawingCanvas.width = mainImage.naturalWidth;
-            state.drawingCanvas.height = mainImage.naturalHeight;
-            console.log(`그리기 캔버스 크기 설정됨 (이미 완료됨): ${state.drawingCanvas.width}x${state.drawingCanvas.height}`);
-            state.annotations = state.stagedPhoto.annotations || [];
-            redrawAnnotations();
-        }
 
         resetZoomAndPan();
         state.isAnalysisPanelVisible = false;
@@ -1838,7 +1353,6 @@ function resetViewerToPlaceholder() {
     `;
     state.primaryPhotoId = null; // 뷰어가 초기화되면 primaryPhotoId도 초기화
     state.comparePhotoIds = []; // 비교 사진 ID 배열도 초기화
-    clearDrawing(); // 플레이스홀더 시 그리기 내용도 지움
 }
 
 // deletePhoto: 선택된 사진을 Firestore에서 삭제합니다. (Storage에서는 삭제하지 않음)
