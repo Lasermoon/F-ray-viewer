@@ -159,11 +159,10 @@ function setupEventListeners() {
     });
 
     // 드래그 앤 드롭 이벤트 리스너 추가 (모든 이미지 래퍼에 적용)
-    const mainImageWrapper = document.getElementById('mainImageWrapper');
-    const compareImageWrapper = document.getElementById('compareImageWrapper');
-    const tertiaryImageWrapper = document.getElementById('tertiaryImageWrapper');
-
-    [mainImageWrapper, compareImageWrapper, tertiaryImageWrapper].forEach(wrapper => {
+    // 중요: HTML 파일의 mainImageWrapper, compareImageWrapper, tertiaryImageWrapper div에
+    //      'image-wrapper' 클래스를 추가해야 이 리스너들이 정상 작동합니다.
+    const imageWrappers = document.querySelectorAll('#mainImageWrapper, #compareImageWrapper, #tertiaryImageWrapper');
+    imageWrappers.forEach(wrapper => {
         wrapper.draggable = true; // 드래그 가능하도록 설정
         wrapper.addEventListener('dragstart', handleDragStart);
         wrapper.addEventListener('dragover', handleDragOver);
@@ -1007,43 +1006,41 @@ function handleMouseUp() {
 
 // handleDragStart: 드래그 시작 시 호출
 function handleDragStart(e) {
-    console.log('Drag Start Event: target ID:', e.target.closest('.image-wrapper')?.id, 'isComparingPhotos:', state.isComparingPhotos, 'comparePhotoIds.length:', state.comparePhotoIds.length);
-    // Only allow dragging when actually comparing photos (isComparingPhotos is true) and there's more than one photo to reorder
-    if (!state.isComparingPhotos || state.comparePhotoIds.filter(id => id !== null).length <= 1) { // Filter out nulls for accurate count
+    console.log('Drag Start Event - Original Target:', e.target);
+    const draggedWrapper = e.target.closest('.image-wrapper'); // .image-wrapper 클래스를 가진 가장 가까운 부모 요소를 찾습니다.
+    console.log('Drag Start Event - Found Wrapper:', draggedWrapper);
+
+    // .image-wrapper를 찾지 못했거나, 비교 모드가 아니거나, 비교할 사진이 2장 미만인 경우 드래그를 방지합니다.
+    if (!draggedWrapper || !state.isComparingPhotos || state.comparePhotoIds.filter(id => id !== null).length <= 1) {
         e.preventDefault(); 
-        console.log('Drag prevented: Not actively comparing or less than 2 valid photos to compare.');
+        console.log('Drag prevented: Not a valid image wrapper, or not actively comparing, or less than 2 valid photos to compare.');
         return;
     }
-
-    const draggedWrapper = e.target.closest('.image-wrapper'); // 실제 래퍼 요소 가져오기
-    if (draggedWrapper && draggedWrapper.dataset.photoId) {
+    
+    if (draggedWrapper.dataset.photoId) {
         e.dataTransfer.setData('text/plain', draggedWrapper.dataset.photoId);
         e.dataTransfer.effectAllowed = 'move';
         draggedWrapper.classList.add('dragging-source'); // 드래그 소스에 시각적 피드백 추가
         console.log('Drag started for photoId:', draggedWrapper.dataset.photoId);
     } else {
-        console.log('Drag prevented: No photoId on dragged element or not a valid wrapper.');
-        e.preventDefault(); // 유효하지 않은 드래그 방지
+        console.log('Drag prevented: Found wrapper but no photoId on dragged element.');
+        e.preventDefault(); // photoId가 없는 경우 드래그 방지
     }
 }
 
 // handleDragOver: 드롭 대상 위로 드래그 시 호출
 function handleDragOver(e) {
     e.preventDefault(); // 드롭 허용
-    // console.log('Drag Over Event:', e.target.closest('.image-wrapper')?.id);
+    const targetWrapper = e.target.closest('.image-wrapper');
     // dataTransfer에 'text/plain' 타입이 포함되어 있는지 확인 (드래그 시작 시 설정된 데이터)
-    if (e.dataTransfer.types.includes('text/plain')) {
+    if (e.dataTransfer.types.includes('text/plain') && targetWrapper && targetWrapper.dataset.photoId && targetWrapper !== e.target.closest('.dragging-source')) {
         e.dataTransfer.dropEffect = 'move';
-        const targetWrapper = e.target.closest('.image-wrapper');
-        if (targetWrapper && targetWrapper.dataset.photoId && targetWrapper !== e.target.closest('.dragging-source')) { // 드래그 소스 자기 자신은 제외
-            targetWrapper.classList.add('drag-over'); // 드롭 대상에 시각적 피드백 추가
-        }
+        targetWrapper.classList.add('drag-over'); // 드롭 대상에 시각적 피드백 추가
     }
 }
 
 // handleDragLeave: 드롭 대상에서 벗어날 때 호출
 function handleDragLeave(e) {
-    // console.log('Drag Leave Event:', e.target.closest('.image-wrapper')?.id);
     e.target.closest('.image-wrapper')?.classList.remove('drag-over'); // 시각적 피드백 제거
 }
 
