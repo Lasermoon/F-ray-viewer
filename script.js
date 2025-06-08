@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // setupEventListeners: 웹사이트의 각종 버튼과 마우스 이벤트들을 연결합니다.
 function setupEventListeners() {
+    console.log('setupEventListeners 함수 호출됨.'); // 디버깅 로그 추가
     const patientSearch = document.getElementById('patientSearch');
     patientSearch.addEventListener('input', (e) => {
         const searchTerm = e.target.value.toLowerCase(); // 검색창에 입력된 텍스트를 가져와 소문자로 바꿉니다.
@@ -185,25 +186,29 @@ function setupEventListeners() {
 
     // 로컬 및 웹 파일 업로드 버튼에 이벤트 리스너 추가
     document.getElementById('uploadLocalImageBtn').addEventListener('click', () => {
-        console.log("PC에서 불러오기 버튼 클릭됨."); // 디버깅 로그 추가
+        console.log("PC에서 불러오기 버튼 클릭됨. (uploadLocalImageBtn)"); // 디버깅 로그 추가
         document.getElementById('localFileInput').click(); // 숨겨진 파일 입력창 클릭 이벤트를 강제로 발생시킵니다.
     });
-    document.getElementById('localFileInput').addEventListener('change', handleLocalFileSelect); // 파일 선택 시 실행될 함수 연결
+    document.getElementById('localFileInput').addEventListener('change', (event) => {
+        console.log("localFileInput change 이벤트 발생."); // 디버깅 로그 추가
+        handleLocalFileSelect(event); // 파일 선택 시 실행될 함수 연결
+    });
     
     // '웹에서 사진 불러오기' 버튼 이벤트 리스너 수정
     document.getElementById('uploadWebImageBtn').addEventListener('click', () => {
-        console.log("웹에서 불러오기 버튼 클릭됨."); // 디버깅 로그 추가
+        console.log("웹에서 불러오기 버튼 클릭됨. (uploadWebImageBtn)"); // 디버깅 로그 추가
         showWebImageSelectModal();
     });
 
     // '새 환자 추가' 버튼 이벤트 리스너 추가
     document.getElementById('addPatientBtn').addEventListener('click', () => {
-        console.log("새 환자 추가 버튼 클릭됨."); // 디버깅 로그 추가
+        console.log("새 환자 추가 버튼 클릭됨. (addPatientBtn)"); // 디버깅 로그 추가
         addNewPatient();
     });
 
     // 웹 이미지 선택 모달 닫기 버튼 이벤트 리스너 추가
     document.getElementById('closeWebImageSelectModal').addEventListener('click', () => {
+        console.log("웹 이미지 선택 모달 닫기 버튼 클릭됨."); // 디버깅 로그 추가
         document.getElementById('webImageSelectOverlay').classList.add('hidden');
     });
 
@@ -282,7 +287,7 @@ function renderPatientList(patients) {
     patients.forEach(patient => {
         const li = document.createElement('li'); // 새로운 리스트 아이템(li)을 만듭니다.
         // Tailwind CSS 클래스를 적용하여 스타일을 입힙니다.
-        li.className = 'patient-list-item p-4 cursor-pointer border-b border-gray-200 flex justify-between items-center';
+        li.className = 'patient-list-item p-2 cursor-pointer border-b border-gray-200 flex justify-between items-center';
         // 현재 선택된 환자라면 'selected' 클래스를 추가하여 강조합니다.
         if(patient.id === state.selectedPatientId) li.classList.add('selected');
 
@@ -305,6 +310,7 @@ function renderPatientList(patients) {
 
 // addNewPatient: 새 환자를 Firestore에 추가합니다.
 async function addNewPatient() {
+    console.log("addNewPatient 함수 실행됨."); // 디버깅 로그 추가
     const name = prompt("새 환자의 이름을 입력해주세요:");
     if (!name) { console.log("새 환자 추가 취소됨 (이름 없음)."); return; }
     const birth = prompt("새 환자의 생년월일을 입력해주세요 (예: 1990-01-01):");
@@ -481,7 +487,7 @@ function renderPhotoList(photos) {
     photos.forEach(photo => {
         const li = document.createElement('li'); // 새로운 리스트 아이템(li)을 만듭니다.
         // Tailwind CSS 클래스를 적용하여 스타일을 입힙니다.
-        li.className = 'photo-list-item p-2 cursor-pointer rounded-md flex items-center space-x-3';
+        li.className = 'photo-list-item p-1 cursor-pointer rounded-md flex items-center space-x-2';
         // 현재 선택된(비교 모드 포함) 사진이라면 'selected' 클래스를 추가합니다.
         if(photo.id === state.primaryPhotoId || photo.id === state.secondaryPhotoId || photo.id === state.tertiaryPhotoId) li.classList.add('selected');
 
@@ -1548,7 +1554,7 @@ function generateSampleAIAnalysis(mode) {
 
 // handleLocalFileSelect: 로컬 파일 선택 시 Firebase Storage에 업로드하고 Firestore에 정보 저장, 화면에 표시합니다.
 async function handleLocalFileSelect(event) {
-    console.log("handleLocalFileSelect 호출됨."); // 디버깅 로그 추가
+    console.log("handleLocalFileSelect 함수 실행됨."); // 디버깅 로그 추가
     const file = event.target.files[0]; 
     if (!file) { console.log("선택된 파일 없음."); return; }
     console.log("선택된 파일:", file.name);
@@ -1591,7 +1597,7 @@ async function handleLocalFileSelect(event) {
 
 // showWebImageSelectModal: 웹 이미지 선택 모달을 표시하고 Storage에서 이미지 목록을 불러옵니다.
 async function showWebImageSelectModal() {
-    console.log("showWebImageSelectModal 호출됨."); // 디버깅 로그 추가
+    console.log("showWebImageSelectModal 함수 실행됨."); // 디버깅 로그 추가
     const webImageSelectOverlay = document.getElementById('webImageSelectOverlay');
     const storageImageList = document.getElementById('storageImageList');
     
@@ -1634,7 +1640,7 @@ async function showWebImageSelectModal() {
 
 // selectWebImageFromStorage: Storage에서 선택된 웹 이미지를 처리합니다.
 async function selectWebImageFromStorage(imageUrl, fileName) {
-    console.log("selectWebImageFromStorage 호출됨. URL:", imageUrl); // 디버깅 로그 추가
+    console.log("selectWebImageFromStorage 함수 실행됨. URL:", imageUrl); // 디버깅 로그 추가
     document.getElementById('webImageSelectOverlay').classList.add('hidden'); // 모달 닫기
 
     const baseName = fileName.split('.')[0]; // 확장자 제외한 이름
@@ -1673,7 +1679,7 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
 
 // displayImageAndSave: 이미지를 뷰어에 표시하고 Firestore에 저장합니다. (환자 ID가 있을 때)
 async function displayImageAndSave(source, sourceType, patientId, photoMode, viewAngle, photoDate, aiAnalysisData = {}) {
-    console.log("displayImageAndSave 호출됨. sourceType:", sourceType, "patientId:", patientId); // 디버깅 로그 추가
+    console.log("displayImageAndSave 함수 실행됨. sourceType:", sourceType, "patientId:", patientId); // 디버깅 로그 추가
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
     const mainImage = document.getElementById('mainImage');
@@ -1733,7 +1739,7 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
 
 // displayImageWithoutSaving: 이미지를 뷰어에 표시하지만 Firestore에는 저장하지 않습니다. (환자 ID가 없을 때)
 async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngle, photoDate, aiAnalysisData = {}) {
-    console.log("displayImageWithoutSaving 호출됨. sourceType:", sourceType); // 디버깅 로그 추가
+    console.log("displayImageWithoutSaving 함수 실행됨. sourceType:", sourceType); // 디버깅 로그 추가
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
     const mainImage = document.getElementById('mainImage');

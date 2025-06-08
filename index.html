@@ -100,20 +100,20 @@
 </head>
 <body class="flex h-screen bg-gray-50 text-gray-800">
     <!-- 사이드바 -->
-    <aside id="sidebar" class="w-1/3 md:w-1/4 lg:w-1/5 bg-white shadow-lg flex flex-col p-4">
+    <aside id="sidebar" class="w-1/3 md:w-1/4 lg:w-1/5 bg-white shadow-lg flex flex-col p-2">
         <!-- 좌측창 상단 타이틀 복구 -->
-        <header class="p-4 border-b border-gray-200">
+        <header class="p-2 border-b border-gray-200">
             <h1 class="text-xl font-bold text-gray-800">F-ray 분석 시스템</h1>
             <p class="text-sm text-gray-500">환자 검색 및 사진 목록</p>
         </header>
 
         <!-- 환자 검색 -->
-        <div class="mb-4">
+        <div class="mb-1 px-2">
             <input type="text" id="patientSearch" placeholder="환자 검색 (이름, 차트 ID)" class="w-full p-2 border border-gray-300 rounded-md focus:ring-[#4CAF50] focus:border-[#4CAF50]">
         </div>
 
         <!-- 새 환자 추가 및 불러오기 버튼을 환자 검색 바로 아래로 이동 -->
-        <div class="flex flex-col space-y-2 mb-4">
+        <div class="flex flex-col space-y-1 mb-2 px-2">
             <button id="addPatientBtn" class="w-full py-2 px-4 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">새 환자 추가</button>
             <button id="uploadLocalImageBtn" class="w-full py-2 px-4 rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors duration-200 font-semibold">PC에서 불러오기</button>
             <input type="file" id="localFileInput" accept="image/*" class="hidden">
@@ -121,17 +121,17 @@
         </div>
 
         <!-- 환자 목록 -->
-        <div id="patientListContainer" class="flex-1 overflow-y-auto mb-4 border-b pb-4">
+        <div id="patientListContainer" class="flex-grow flex-[1] overflow-y-auto mb-2 border-b pb-2">
             <ul id="patientList" class="space-y-1">
                 <!-- 환자 항목이 여기에 동적으로 로드됩니다. -->
             </ul>
         </div>
 
         <!-- 사진 목록 섹션 (처음에는 숨겨짐) -->
-        <div id="photoListSection" class="hidden flex-1 overflow-y-auto flex flex-col">
-            <h2 id="photoListHeader" class="text-lg font-semibold mb-3 border-b pb-2">환자 사진 목록</h2>
+        <div id="photoListSection" class="hidden flex-grow flex-[2] overflow-y-auto flex flex-col">
+            <h2 id="photoListHeader" class="text-base font-semibold mb-2 border-b pb-1 px-2">환자 사진 목록</h2>
             <!-- 사진 필터 -->
-            <div class="mb-3 space-y-2">
+            <div class="mb-1 space-y-1 px-2">
                 <div>
                     <label for="photoModeFilter" class="block text-sm font-medium text-gray-700 mb-1">모드:</label>
                     <div class="flex space-x-1">
@@ -155,10 +155,10 @@
                     </select>
                 </div>
             </div>
-            <ul id="photoList" class="space-y-2 flex-1 overflow-y-auto">
+            <ul id="photoList" class="space-y-1 flex-1 overflow-y-auto">
                 <!-- 사진 항목이 여기에 동적으로 로드됩니다. -->
             </ul>
-            <button id="deletePhotoBtn" class="w-full py-2 px-4 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors duration-200 font-semibold mt-4">선택 사진 삭제</button>
+            <button id="deletePhotoBtn" class="w-full py-2 px-4 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors duration-200 font-semibold mt-2">선택 사진 삭제</button>
         </div>
     </aside>
 
