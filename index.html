@@ -12,7 +12,7 @@
         }
         .patient-list-item.selected, .photo-list-item.selected {
             background-color: #e0f2f1; /* Teal 50 */
-            border-left: 4px solid #00897b; /* Teal 600 */
+            border-left: 44px solid #00897b; /* Teal 600 */
         }
         .photo-list-item:hover, .patient-list-item:hover {
             background-color: #f0f0f0;
@@ -87,6 +87,15 @@
             height: 100px; /* Fixed height for consistency */
             object-fit: cover;
         }
+        /* For drag-and-drop visual feedback */
+        .image-wrapper.dragging-source {
+            opacity: 0.5;
+            border: 2px dashed #00897b;
+        }
+        .image-wrapper.drag-over {
+            border: 2px solid #00897b;
+            box-shadow: 0 0 10px rgba(0, 137, 123, 0.5);
+        }
     </style>
 </head>
 <body class="flex h-screen bg-gray-50 text-gray-800">
@@ -103,23 +112,20 @@
             <input type="text" id="patientSearch" placeholder="환자 검색 (이름, 차트 ID)" class="w-full p-2 border border-gray-300 rounded-md focus:ring-[#4CAF50] focus:border-[#4CAF50]">
         </div>
 
+        <!-- 새 환자 추가 및 불러오기 버튼을 환자 검색 바로 아래로 이동 -->
+        <div class="flex flex-col space-y-2 mb-4">
+            <button id="addPatientBtn" class="w-full py-2 px-4 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">새 환자 추가</button>
+            <button id="uploadLocalImageBtn" class="w-full py-2 px-4 rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors duration-200 font-semibold">PC에서 불러오기</button>
+            <input type="file" id="localFileInput" accept="image/*" class="hidden">
+            <button id="uploadWebImageBtn" class="w-full py-2 px-4 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors duration-200 font-semibold">웹에서 불러오기</button>
+        </div>
+
         <!-- 환자 목록 -->
         <div id="patientListContainer" class="flex-1 overflow-y-auto mb-4 border-b pb-4">
             <ul id="patientList" class="space-y-1">
                 <!-- 환자 항목이 여기에 동적으로 로드됩니다. -->
             </ul>
         </div>
-
-        <!-- 환자 추가 버튼 -->
-        <button id="addPatientBtn" class="w-full py-2 px-4 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold mb-2">새 환자 추가</button>
-
-        <!-- PC에서 불러오기 & 웹에서 불러오기 버튼 복구 -->
-        <div class="flex flex-col space-y-2 mb-4">
-            <button id="uploadLocalImageBtn" class="w-full py-2 px-4 rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors duration-200 font-semibold">PC에서 불러오기</button>
-            <input type="file" id="localFileInput" accept="image/*" class="hidden">
-            <button id="uploadWebImageBtn" class="w-full py-2 px-4 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors duration-200 font-semibold">웹에서 불러오기</button>
-        </div>
-
 
         <!-- 사진 목록 섹션 (처음에는 숨겨짐) -->
         <div id="photoListSection" class="hidden flex-1 overflow-y-auto flex flex-col">
@@ -167,7 +173,6 @@
             <div class="flex space-x-2">
                 <button id="analyzeBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">AI 분석</button>
                 <button id="compareBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">사진 비교</button>
-                <!-- PC/웹에서 불러오기 버튼은 이제 사이드바로 이동했습니다. -->
                 <button id="drawingToolsBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">그리기 도구</button>
                 <button id="fullScreenBtn" class="p-2 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200">전체 화면</button>
             </div>

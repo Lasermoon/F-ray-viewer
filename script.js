@@ -2,7 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 // getDoc, doc을 추가하여 Firestore 문서 직접 참조 및 가져오기 기능을 포함합니다.
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, documentId, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-// Storage 관련 SDK를 불러옵니다. (export 키워드 제거)
+// Storage 관련 SDK를 불러옵니다.
 import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 
@@ -37,8 +37,8 @@ const state = {
     currentAngleFilter: 'all', // 각도 필터 추가
     isAnalysisPanelVisible: false, // 분석 패널이 보이는지 여부
     isCompareModeActive: false, // 비교 모드 활성화 여부
-    compareSelectionStep: 0, // 비교 사진 선택 단계 (0: 선택 중 아님, 1: 두 번째 선택, 2: 세 번째 선택)
-    compareCount: 0, // 비교할 사진 개수 (2 또는 3)
+    compareSelectionStep: 0, // 0: 선택 중 아님, 1: 두 번째 선택, 2: 세 번째 선택
+    compareCount: 0, // 2 또는 3
     currentZoomLevel: 1.0, // 현재 확대 레벨 (1.0 = 원본 크기)
     zoomStep: 0.2, // 확대/축소 시 변화량
     maxZoom: 3.0, // 최대 확대 레벨
@@ -185,22 +185,29 @@ function setupEventListeners() {
 
     // 로컬 및 웹 파일 업로드 버튼에 이벤트 리스너 추가
     document.getElementById('uploadLocalImageBtn').addEventListener('click', () => {
+        console.log("PC에서 불러오기 버튼 클릭됨."); // 디버깅 로그 추가
         document.getElementById('localFileInput').click(); // 숨겨진 파일 입력창 클릭 이벤트를 강제로 발생시킵니다.
     });
     document.getElementById('localFileInput').addEventListener('change', handleLocalFileSelect); // 파일 선택 시 실행될 함수 연결
     
     // '웹에서 사진 불러오기' 버튼 이벤트 리스너 수정
-    document.getElementById('uploadWebImageBtn').addEventListener('click', showWebImageSelectModal); 
+    document.getElementById('uploadWebImageBtn').addEventListener('click', () => {
+        console.log("웹에서 불러오기 버튼 클릭됨."); // 디버깅 로그 추가
+        showWebImageSelectModal();
+    });
 
     // '새 환자 추가' 버튼 이벤트 리스너 추가
-    document.getElementById('addPatientBtn').addEventListener('click', addNewPatient);
+    document.getElementById('addPatientBtn').addEventListener('click', () => {
+        console.log("새 환자 추가 버튼 클릭됨."); // 디버깅 로그 추가
+        addNewPatient();
+    });
 
     // 웹 이미지 선택 모달 닫기 버튼 이벤트 리스너 추가
     document.getElementById('closeWebImageSelectModal').addEventListener('click', () => {
         document.getElementById('webImageSelectOverlay').classList.add('hidden');
     });
 
-    // 드래그 앤 드롭 이벤트 리스너 추가
+    // 드래그 앤 드롭 이벤트 리스너 추가 (모든 이미지 래퍼에 적용)
     const mainImageWrapper = document.getElementById('mainImageWrapper');
     const compareImageWrapper = document.getElementById('compareImageWrapper');
     const tertiaryImageWrapper = document.getElementById('tertiaryImageWrapper');
@@ -299,13 +306,13 @@ function renderPatientList(patients) {
 // addNewPatient: 새 환자를 Firestore에 추가합니다.
 async function addNewPatient() {
     const name = prompt("새 환자의 이름을 입력해주세요:");
-    if (!name) return;
+    if (!name) { console.log("새 환자 추가 취소됨 (이름 없음)."); return; }
     const birth = prompt("새 환자의 생년월일을 입력해주세요 (예: 1990-01-01):");
-    if (!birth) return;
+    if (!birth) { console.log("새 환자 추가 취소됨 (생년월일 없음)."); return; }
     const gender = prompt("새 환자의 성별을 입력해주세요 (예: 남/여):");
-    if (!gender) return;
+    if (!gender) { console.log("새 환자 추가 취소됨 (성별 없음)."); return; }
     const chartId = prompt("새 환자의 차트 ID를 입력해주세요 (예: C-20240001):");
-    if (!chartId) return;
+    if (!chartId) { console.log("새 환자 추가 취소됨 (차트 ID 없음)."); return; }
 
     try {
         const patientsCol = collection(db, 'patients');
@@ -447,7 +454,12 @@ async function fetchPhotos(patientId) {
         }
 
         // 최신순으로 정렬 (uploadedAt을 기준으로)
-        photos.sort((a, b) => b.uploadedAt.toDate().getTime() - a.uploadedAt.toDate().getTime());
+        photos.sort((a, b) => {
+            // Firestore Timestamp 객체를 JavaScript Date 객체로 변환하여 비교
+            const dateA = a.uploadedAt && a.uploadedAt.toDate ? a.uploadedAt.toDate().getTime() : 0;
+            const dateB = b.uploadedAt && b.uploadedAt.toDate ? b.uploadedAt.toDate().getTime() : 0;
+            return dateB - dateA;
+        });
 
         renderPhotoList(photos); // 불러온 사진 목록을 화면에 그립니다.
         if (photos.length === 0) {
@@ -503,6 +515,18 @@ async function selectPhoto(photoId) {
         return;
     }
 
+    // 주석 데이터 불러오기 및 파싱
+    state.annotations = []; // 기존 주석 초기화
+    if (photo.annotations) {
+        try {
+            state.annotations = JSON.parse(photo.annotations);
+        } catch (e) {
+            console.error("Failed to parse annotations:", e);
+            state.annotations = []; // 파싱 실패 시 빈 배열로 초기화
+        }
+    }
+
+
     if (state.isCompareModeActive) {
         // Add to comparePhotoIds based on selection step
         if (state.compareSelectionStep === 1) {
@@ -542,20 +566,19 @@ async function selectPhoto(photoId) {
     // 그리기 캔버스 크기 및 초기화
     const mainImage = document.getElementById('mainImage');
     mainImage.onload = () => {
+        // 이미지의 자연 해상도를 캔버스의 내부 해상도로 설정합니다.
         state.drawingCanvas.width = mainImage.naturalWidth;
         state.drawingCanvas.height = mainImage.naturalHeight;
         console.log(`그리기 캔버스 크기 설정됨: ${state.drawingCanvas.width}x${state.drawingCanvas.height}`);
         
         // 이미지 로드 후 주석 다시 그리기
-        state.annotations = photo.annotations || [];
         redrawAnnotations();
     };
-    // 이미지가 이미 로드되어 있는 경우를 대비
-    if (mainImage.complete) {
+    // 이미지가 이미 로드되어 있는 경우를 대비 (onload 이벤트가 발생하지 않을 수 있음)
+    if (mainImage.complete && mainImage.naturalWidth > 0 && mainImage.naturalHeight > 0) {
         state.drawingCanvas.width = mainImage.naturalWidth;
         state.drawingCanvas.height = mainImage.naturalHeight;
         console.log(`그리기 캔버스 크기 설정됨 (이미 완료됨): ${state.drawingCanvas.width}x${state.drawingCanvas.height}`);
-        state.annotations = photo.annotations || [];
         redrawAnnotations();
     }
 
@@ -578,6 +601,9 @@ function toggleAnalysisPanel() {
         
         // AI 분석 패널 활성화 시 그리기 도구 패널 숨기기
         document.getElementById('drawingToolsPanel').classList.add('hidden');
+        document.getElementById('drawingToolsBtn').classList.remove('bg-[#4CAF50]', 'text-white');
+        document.getElementById('drawingToolsBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
+        state.drawingCanvas.style.pointerEvents = 'none'; // 그리기 캔버스 비활성화
 
         if (state.primaryPhotoId) {
             getDoc(doc(db, 'photos', state.primaryPhotoId))
@@ -735,21 +761,39 @@ function toggleDrawingPanel() {
     const btn = document.getElementById('drawingToolsBtn');
     
     if (panel.classList.contains('hidden')) {
+        // 패널 보이기
         panel.classList.remove('hidden');
         btn.classList.add('bg-[#4CAF50]', 'text-white');
+        
         // 그리기 도구 활성화 시 AI 분석 패널 숨기기
         document.getElementById('analysisPanel').classList.add('hidden');
         document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white');
         document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
+        clearAnalysis(); // AI 분석 내용 초기화
         
         // 그리기 캔버스 포인터 이벤트 활성화 (그리기 가능)
         state.drawingCanvas.style.pointerEvents = 'auto';
+        // 초기 펜 도구로 설정 및 스타일 업데이트
+        setDrawingTool('pen'); 
+
+        // 현재 선택된 사진이 없다면 경고
+        if (!state.primaryPhotoId) {
+            alert('그림을 그리려면 먼저 사진을 선택해주세요.');
+        }
+        // 비교 모드라면 경고
+        if (state.isCompareModeActive) {
+            alert('비교 모드에서는 그릴 수 없습니다. 비교 모드를 해제해주세요.');
+        }
+
     } else {
+        // 패널 숨기기
         panel.classList.add('hidden');
         btn.classList.remove('bg-[#4CAF50]', 'text-white');
         btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
         // 그리기 캔버스 포인터 이벤트 비활성화 (이미지 팬/줌 가능)
         state.drawingCanvas.style.pointerEvents = 'none';
+        // 각도 측정 중이었다면 초기화
+        state.anglePoints = [];
     }
 }
 
@@ -785,12 +829,9 @@ function setDrawingTool(tool) {
 
 // 그리기 시작
 function startDrawing(e) {
-    if (!state.primaryPhotoId) { // 사진이 선택되지 않았다면 그리기 불가
-        alert('그림을 그리려면 먼저 사진을 선택해주세요.');
-        return;
-    }
-    if (state.isCompareModeActive) { // 비교 모드에서는 그리기 불가
-        alert('비교 모드에서는 그릴 수 없습니다. 비교 모드를 해제해주세요.');
+    if (!state.primaryPhotoId || state.isCompareModeActive) { 
+        // 사진이 선택되지 않았거나 비교 모드라면 그리기 불가
+        console.log('그리기 시작 불가: 사진 미선택 또는 비교 모드');
         return;
     }
     
@@ -816,7 +857,8 @@ function startDrawing(e) {
                 p2: normalizeCoordinates(p2),
                 angle: parseFloat(angleDeg.toFixed(2)), // 소수점 2자리까지 저장
                 color: state.drawingColor,
-                width: state.drawingStrokeWidth
+                width: state.drawingStrokeWidth,
+                fontSize: 16 // 각도 텍스트 폰트 크기
             });
             redrawAnnotations();
             state.anglePoints = []; // 각도 측정 초기화
@@ -846,6 +888,7 @@ function startDrawing(e) {
 // 그리기 (마우스 이동 시)
 function draw(e) {
     if (!state.isDrawing) return;
+    if (!state.primaryPhotoId || state.isCompareModeActive) return; // 다시 한 번 확인
 
     const { x, y } = getCanvasCoordinates(e); // 현재 캔버스 내부 좌표
     const currentAnnotation = state.annotations[state.annotations.length - 1];
@@ -862,8 +905,15 @@ function draw(e) {
         currentAnnotation.points.push(normalizeCoordinates({ x, y })); // 경로에 점 추가
 
     } else if (state.drawingTool === 'eraser') {
+        // 지우개는 실제 픽셀을 지우는 clearRect를 사용
         state.drawingCtx.clearRect(x - state.drawingStrokeWidth * 1.5, y - state.drawingStrokeWidth * 1.5, state.drawingStrokeWidth * 3, state.drawingStrokeWidth * 3);
-        currentAnnotation.points.push(normalizeCoordinates({ x, y })); // 지우개 경로 저장 (나중에 다시 그릴 때 사용)
+        // 지우개 흔적도 annotation으로 저장하여 저장 후 불러올 때도 동일하게 지워진 것처럼 보이게 할 수 있으나,
+        // 현재는 단순성을 위해 clearRect를 사용하여 실제 캔버스 픽셀을 수정합니다.
+        // 따라서 저장 후 불러올 때 '지워진 상태'를 복원하려면 캔버스 픽셀 데이터를 저장하는 복잡한 방식이 필요합니다.
+        // 현재 구현에서는 지우개는 임시적인 작업으로 간주됩니다.
+        // 만약 '지우개 이력'을 저장하려면, 캔버스 상태를 스냅샷으로 저장하거나
+        // 각 지우개 동작을 역으로 추적할 수 있는 다른 방식으로 설계해야 합니다.
+        // 현재는 지우개 동작은 저장되지 않습니다.
     }
 
     state.lastX = x;
@@ -900,12 +950,25 @@ function saveMemo() {
 // 캔버스 좌표를 이미지 자연 해상도 기준으로 변환
 function getCanvasCoordinates(e) {
     const rect = state.drawingCanvas.getBoundingClientRect();
-    const scaleX = state.drawingCanvas.width / rect.width;
-    const scaleY = state.drawingCanvas.height / rect.height;
+    const mainImage = document.getElementById('mainImage');
+
+    // 이미지가 현재 표시되는 실제 크기와 원본 크기 간의 비율을 계산
+    // 캔버스의 내부 해상도는 이미지의 naturalWidth/Height를 따르므로,
+    // 마우스 이벤트 좌표를 캔버스 내부의 "픽셀" 좌표로 변환해야 합니다.
+    const displayedWidth = mainImage.clientWidth * state.currentZoomLevel;
+    const displayedHeight = mainImage.clientHeight * state.currentZoomLevel;
+
+    // 이미지가 container 중앙에 위치할 때의 offset 고려
+    const offsetX = (rect.width - displayedWidth) / 2;
+    const offsetY = (rect.height - displayedHeight) / 2;
+
+    const xInDisplayedImage = e.clientX - rect.left - offsetX - state.currentTranslateX;
+    const yInDisplayedImage = e.clientY - rect.top - offsetY - state.currentTranslateY;
+
+    // 캔버스 내부의 실제 픽셀 좌표
+    const x = (xInDisplayedImage / displayedWidth) * mainImage.naturalWidth;
+    const y = (yInDisplayedImage / displayedHeight) * mainImage.naturalHeight;
     
-    // 이벤트 좌표를 캔버스 내부 좌표로 변환
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
     return { x, y };
 }
 
@@ -923,7 +986,11 @@ function normalizeCoordinates(coords) {
 
 // 정규화된 좌표를 현재 캔버스 크기에 맞춰 픽셀 좌표로 변환 (그리기용)
 function denormalizeCoordinates(coords) {
-    if (!state.drawingCanvas) return coords; // 또는 오류 처리
+    if (!state.drawingCanvas || state.drawingCanvas.width === 0 || state.drawingCanvas.height === 0) {
+        // 캔버스가 초기화되지 않았거나 크기가 0이면 유효하지 않은 좌표 반환
+        console.warn("denormalizeCoordinates: 캔버스 크기가 0입니다. 좌표 변환 실패.");
+        return { x: 0, y: 0 }; 
+    }
     return {
         x: coords.x * state.drawingCanvas.width,
         y: coords.y * state.drawingCanvas.height
@@ -932,6 +999,8 @@ function denormalizeCoordinates(coords) {
 
 // 모든 주석 다시 그리기
 function redrawAnnotations() {
+    if (!state.drawingCtx || !state.drawingCanvas) return;
+
     state.drawingCtx.clearRect(0, 0, state.drawingCanvas.width, state.drawingCanvas.height); // 전체 캔버스 지우기
 
     state.annotations.forEach(annotation => {
@@ -952,7 +1021,7 @@ function redrawAnnotations() {
             state.drawingCtx.stroke();
         } else if (annotation.type === 'text') {
             state.drawingCtx.fillStyle = annotation.color;
-            state.drawingCtx.font = `${annotation.fontSize}px Arial`; // 폰트 설정
+            state.drawingCtx.font = `${annotation.fontSize}px Inter`; // 폰트 설정. Inter 폰트 사용
             const { x, y } = denormalizeCoordinates({x: annotation.x, y: annotation.y});
             state.drawingCtx.fillText(annotation.text, x, y);
         } else if (annotation.type === 'angle') {
@@ -968,18 +1037,15 @@ function redrawAnnotations() {
 
             // 각도 텍스트 표시
             state.drawingCtx.fillStyle = annotation.color;
-            state.drawingCtx.font = `${annotation.fontSize || 16}px Arial`;
+            state.drawingCtx.font = `${annotation.fontSize || 16}px Inter`; // Inter 폰트 사용
             const midX = (p1.x + p2.x) / 2;
             const midY = (p1.y + p2.y) / 2;
             state.drawingCtx.fillText(`${annotation.angle}°`, midX + 10, midY - 10);
         } else if (annotation.type === 'erase') {
-             // 지우개는 다시 그릴 때만 필요. 실제로 지우는 동작은 clearRect로 이루어짐.
-             // 따라서 erase 타입의 annotations를 재그림할 때는 그릴 내용이 없습니다.
-             // 만약 erase가 실제로 canvas에 흰색 선을 그리는 방식이었다면, 여기서 그려야 합니다.
-             // 현재는 clearRect를 사용하므로, 복원하려면 canvas pixel data를 저장해야 합니다.
-             // 복잡성을 위해 현재는 '지우개'는 그리기 이력에서 제외하거나,
-             // undo/redo 기능에만 활용하도록 하는 것이 좋습니다.
-             // 여기서는 단순히 무시합니다.
+             // 'erase' 타입은 캔버스 픽셀을 직접 지우는 방식이므로, 저장 후 재그림 시 복원되지 않습니다.
+             // 이 기능을 저장 후 복원하려면 캔버스 픽셀 데이터를 저장하거나,
+             // 각 지우개 동작을 추적하여 다시 그리는 로직이 필요합니다 (현재 구현 범위 외).
+             // 따라서 여기서는 아무것도 그리지 않습니다.
         }
     });
 }
@@ -1001,8 +1067,10 @@ async function saveAnnotations() {
     }
     try {
         const photoRef = doc(db, 'photos', state.primaryPhotoId);
+        // 저장 시, 주석 배열을 Stringify하여 Firestore의 배열 제한을 피하고 단일 문자열로 저장
+        // 불러올 때는 JSON.parse()로 다시 객체 배열로 변환합니다.
         await updateDoc(photoRef, {
-            annotations: state.annotations // 현재 annotations 배열 저장
+            annotations: JSON.stringify(state.annotations) 
         });
         alert('주석이 성공적으로 저장되었습니다!');
     } catch (error) {
@@ -1015,12 +1083,12 @@ async function saveAnnotations() {
 // handleCompareButtonClick: '사진 비교' 버튼 클릭 시 실행됩니다.
 function handleCompareButtonClick() {
     // Check if there's at least one photo selected to start comparison
-    if (!state.primaryPhotoId && state.comparePhotoIds.length === 0) {
+    if (!state.primaryPhotoId) { // primaryPhotoId가 null이면 선택된 사진 없음
         alert('먼저 비교할 첫 번째 사진을 불러오거나 선택해주세요.');
         return;
     }
 
-    if (state.isCompareModeActive) { // Already in comparison selection mode, cancel
+    if (state.isCompareModeActive) { // If currently in comparison selection mode, cancel it
         state.isCompareModeActive = false;
         state.compareSelectionStep = 0;
         state.compareCount = 0;
@@ -1041,8 +1109,15 @@ function handleCompareButtonClick() {
                 if (photo) renderAnalysis(photo);
             });
         }
-    } else { // Start comparison mode
-        alert('비교 기능은 현재 선택된 사진에 대해 작동하며, 다른 사진을 선택해야 합니다. 환자 목록 또는 직접 불러오기를 통해 사진을 선택해주세요.');
+    } else { // Start comparison mode, show choice overlay
+        // 비교 모드 시작 시 그리기 도구 패널 숨기기
+        document.getElementById('drawingToolsPanel').classList.add('hidden');
+        document.getElementById('drawingToolsBtn').classList.remove('bg-[#4CAF50]', 'text-white');
+        document.getElementById('drawingToolsBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
+        state.drawingCanvas.style.pointerEvents = 'none'; // 그리기 캔버스 비활성화
+        clearDrawing(); // 그리기 내용 초기화
+
+        // 비교 선택 모달 표시
         document.getElementById('compareChoiceOverlay').classList.remove('hidden');
     }
 }
@@ -1100,7 +1175,16 @@ async function updateComparisonDisplay() {
     let infoTexts = [];
     let patientData = null; // To store patient data once for the viewer header
 
-    for (let i = 0; i < photoElements.length; i++) {
+    // 이미지 래퍼들의 클래스 초기화
+    photoElements.forEach(el => {
+        el.wrapper.classList.add('hidden');
+        el.wrapper.classList.remove('flex-1', 'w-full');
+        document.getElementById(el.id).src = '';
+        el.wrapper.dataset.photoId = ''; // Data ID 초기화
+    });
+
+
+    for (let i = 0; i < state.comparePhotoIds.length; i++) {
         const photoId = state.comparePhotoIds[i];
         const imgEl = document.getElementById(photoElements[i].id);
         const wrapperEl = photoElements[i].wrapper;
@@ -1118,17 +1202,7 @@ async function updateComparisonDisplay() {
                     const patientDoc = await getDoc(doc(db, 'patients', photo.patientId));
                     patientData = patientDoc.exists() ? patientDoc.data() : null;
                 }
-            } else {
-                imgEl.src = ''; // Clear image
-                wrapperEl.classList.add('hidden');
-                wrapperEl.classList.remove('flex-1');
-                wrapperEl.dataset.photoId = '';
             }
-        } else {
-            imgEl.src = ''; // Clear image
-            wrapperEl.classList.add('hidden');
-            wrapperEl.classList.remove('flex-1');
-            wrapperEl.dataset.photoId = '';
         }
     }
 
@@ -1140,8 +1214,7 @@ async function updateComparisonDisplay() {
         mainImageWrapper.classList.remove('hidden'); // Ensure main image is visible
         mainImageWrapper.classList.remove('flex-1');
         mainImageWrapper.classList.add('w-full');
-        compareImageWrapper.classList.add('hidden');
-        tertiaryImageWrapper.classList.add('hidden');
+        // Other wrappers are already hidden by the loop initial cleanup
         imageContainer.classList.remove('flex-row', 'gap-4');
         imageContainer.classList.add('flex-col');
     }
@@ -1170,7 +1243,7 @@ async function updateComparisonDisplay() {
     document.getElementById('drawingToolsPanel').classList.add('hidden');
     document.getElementById('drawingToolsBtn').classList.remove('bg-[#4CAF50]', 'text-white');
     document.getElementById('drawingToolsBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-    clearDrawing();
+    clearDrawing(); // 그리기 내용 초기화
 }
 
 // resetComparisonView function will be simplified, as updateComparisonDisplay handles most of it.
@@ -1349,11 +1422,11 @@ function handleMouseUp() {
 
 // handleDragStart: 드래그 시작 시 호출
 function handleDragStart(e) {
-    // console.log('Drag Start Event:', e.target.closest('.image-wrapper')?.id, 'isCompareModeActive:', state.isCompareModeActive, 'comparePhotoIds.length:', state.comparePhotoIds.length);
+    console.log('Drag Start Event:', e.target.closest('.image-wrapper')?.id, 'isCompareModeActive:', state.isCompareModeActive, 'comparePhotoIds.length:', state.comparePhotoIds.length);
     // 비교 모드 활성화 상태에서 2장 이상일 때만 드래그 허용
     if (!state.isCompareModeActive || state.comparePhotoIds.length <= 1) {
         e.preventDefault(); 
-        // console.log('Drag prevented: Not in compare mode or less than 2 photos.');
+        console.log('Drag prevented: Not in compare mode or less than 2 photos.');
         return;
     }
 
@@ -1362,9 +1435,10 @@ function handleDragStart(e) {
         e.dataTransfer.setData('text/plain', draggedWrapper.dataset.photoId);
         e.dataTransfer.effectAllowed = 'move';
         draggedWrapper.classList.add('dragging-source'); // 드래그 소스에 시각적 피드백 추가
-        // console.log('Drag started for photoId:', draggedWrapper.dataset.photoId);
+        console.log('Drag started for photoId:', draggedWrapper.dataset.photoId);
     } else {
-        // console.log('Drag prevented: No photoId on dragged element.');
+        console.log('Drag prevented: No photoId on dragged element or not a valid wrapper.');
+        e.preventDefault(); // 유효하지 않은 드래그 방지
     }
 }
 
@@ -1376,7 +1450,7 @@ function handleDragOver(e) {
     if (e.dataTransfer.types.includes('text/plain')) {
         e.dataTransfer.dropEffect = 'move';
         const targetWrapper = e.target.closest('.image-wrapper');
-        if (targetWrapper) {
+        if (targetWrapper && targetWrapper !== e.target.closest('.dragging-source')) { // 드래그 소스 자기 자신은 제외
             targetWrapper.classList.add('drag-over'); // 드롭 대상에 시각적 피드백 추가
         }
     }
@@ -1391,17 +1465,17 @@ function handleDragLeave(e) {
 // handleDrop: 드롭 시 호출
 async function handleDrop(e) {
     e.preventDefault();
-    // console.log('Drop Event on:', e.target.closest('.image-wrapper')?.id);
+    console.log('Drop Event on:', e.target.closest('.image-wrapper')?.id);
     const targetWrapper = e.target.closest('.image-wrapper');
     targetWrapper?.classList.remove('drag-over'); // 시각적 피드백 제거
 
     if (targetWrapper && targetWrapper.dataset.photoId) {
         const draggedPhotoId = e.dataTransfer.getData('text/plain');
         const targetPhotoId = targetWrapper.dataset.photoId;
-        // console.log('Dragged ID:', draggedPhotoId, 'Target ID:', targetPhotoId);
+        console.log('Dragged ID:', draggedPhotoId, 'Target ID:', targetPhotoId);
 
         if (draggedPhotoId === targetPhotoId) { // 자기 자신 위에 드롭한 경우
-            // console.log('Dropped on itself.');
+            console.log('Dropped on itself. No change.');
             return;
         }
 
@@ -1410,27 +1484,30 @@ async function handleDrop(e) {
 
         if (draggedIndex !== -1 && targetIndex !== -1) {
             // 배열 순서 변경
-            const [draggedItem] = state.comparePhotoIds.splice(draggedIndex, 1);
-            state.comparePhotoIds.splice(targetIndex, 0, draggedItem);
+            const newComparePhotoIds = [...state.comparePhotoIds]; // 배열 복사
+            const [draggedItem] = newComparePhotoIds.splice(draggedIndex, 1);
+            newComparePhotoIds.splice(targetIndex, 0, draggedItem);
+            
+            state.comparePhotoIds = newComparePhotoIds; // 새로운 배열로 상태 업데이트
             
             // 일관성을 위해 primary, secondary, tertiary ID 업데이트
             state.primaryPhotoId = state.comparePhotoIds[0] || null;
             state.secondaryPhotoId = state.comparePhotoIds[1] || null;
             state.tertiaryPhotoId = state.comparePhotoIds[2] || null;
 
-            // console.log('New comparePhotoIds order:', state.comparePhotoIds);
+            console.log('New comparePhotoIds order:', state.comparePhotoIds);
             await updateComparisonDisplay(); // 새 순서로 비교 뷰 다시 렌더링
         } else {
-            // console.log('Invalid drag or target index:', draggedIndex, targetIndex);
+            console.log('Invalid drag or target index:', draggedIndex, targetIndex);
         }
     } else {
-        // console.log('Drop target has no photoId or is not a valid wrapper.');
+        console.log('Drop target has no photoId or is not a valid wrapper.');
     }
 }
 
 // handleDragEnd: 드래그가 끝날 때 (성공/실패 무관) 호출
 function handleDragEnd(e) {
-    // console.log('Drag End Event:', e.target.closest('.image-wrapper')?.id);
+    console.log('Drag End Event:', e.target.closest('.image-wrapper')?.id);
     e.target.closest('.image-wrapper')?.classList.remove('dragging-source'); // 소스 피드백 제거
 }
 
@@ -1471,8 +1548,10 @@ function generateSampleAIAnalysis(mode) {
 
 // handleLocalFileSelect: 로컬 파일 선택 시 Firebase Storage에 업로드하고 Firestore에 정보 저장, 화면에 표시합니다.
 async function handleLocalFileSelect(event) {
+    console.log("handleLocalFileSelect 호출됨."); // 디버깅 로그 추가
     const file = event.target.files[0]; 
-    if (!file) return; 
+    if (!file) { console.log("선택된 파일 없음."); return; }
+    console.log("선택된 파일:", file.name);
 
     // 파일 이름과 확장자를 가져옵니다.
     const fileName = file.name;
@@ -1512,6 +1591,7 @@ async function handleLocalFileSelect(event) {
 
 // showWebImageSelectModal: 웹 이미지 선택 모달을 표시하고 Storage에서 이미지 목록을 불러옵니다.
 async function showWebImageSelectModal() {
+    console.log("showWebImageSelectModal 호출됨."); // 디버깅 로그 추가
     const webImageSelectOverlay = document.getElementById('webImageSelectOverlay');
     const storageImageList = document.getElementById('storageImageList');
     
@@ -1554,6 +1634,7 @@ async function showWebImageSelectModal() {
 
 // selectWebImageFromStorage: Storage에서 선택된 웹 이미지를 처리합니다.
 async function selectWebImageFromStorage(imageUrl, fileName) {
+    console.log("selectWebImageFromStorage 호출됨. URL:", imageUrl); // 디버깅 로그 추가
     document.getElementById('webImageSelectOverlay').classList.add('hidden'); // 모달 닫기
 
     const baseName = fileName.split('.')[0]; // 확장자 제외한 이름
@@ -1592,6 +1673,7 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
 
 // displayImageAndSave: 이미지를 뷰어에 표시하고 Firestore에 저장합니다. (환자 ID가 있을 때)
 async function displayImageAndSave(source, sourceType, patientId, photoMode, viewAngle, photoDate, aiAnalysisData = {}) {
+    console.log("displayImageAndSave 호출됨. sourceType:", sourceType, "patientId:", patientId); // 디버깅 로그 추가
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
     const mainImage = document.getElementById('mainImage');
@@ -1628,7 +1710,7 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
             date: photoDate, // 파싱된 photoDate 사용
             uploadedAt: new Date(),
             ai_analysis: aiAnalysisData, // AI 분석 데이터 포함
-            annotations: [] // 주석 필드 초기화
+            annotations: JSON.stringify([]) // 주석 필드 초기화 (빈 배열을 JSON 문자열로)
         };
         const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
         state.primaryPhotoId = docRef.id; // Firestore 문서 ID를 primaryPhotoId로 사용
@@ -1651,6 +1733,7 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
 
 // displayImageWithoutSaving: 이미지를 뷰어에 표시하지만 Firestore에는 저장하지 않습니다. (환자 ID가 없을 때)
 async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngle, photoDate, aiAnalysisData = {}) {
+    console.log("displayImageWithoutSaving 호출됨. sourceType:", sourceType); // 디버깅 로그 추가
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
     const mainImage = document.getElementById('mainImage');
@@ -1668,13 +1751,12 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
         let imageUrlToDisplay;
 
         if (sourceType === 'local') {
-            // 로컬 파일은 임시 URL을 사용하거나, Storage에 임시 업로드 후 URL을 가져올 수 있음
-            // 여기서는 간단히 Blob URL을 사용합니다.
+            // 로컬 파일은 임시 URL을 사용합니다.
             imageUrlToDisplay = URL.createObjectURL(source);
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData, annotations: [] }; // date 및 ai_analysis 추가
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData, annotations: [] }; // date 및 ai_analysis, annotations 추가
         } else if (sourceType === 'web') {
             imageUrlToDisplay = source;
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData, annotations: [] }; // date 및 ai_analysis 추가
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData, annotations: [] }; // date 및 ai_analysis, annotations 추가
         }
         
         state.primaryPhotoId = null; // stagedPhoto는 아직 Firestore ID가 없음
@@ -1711,7 +1793,8 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
             state.annotations = state.stagedPhoto.annotations || [];
             redrawAnnotations();
         };
-        if (mainImage.complete) { // 이미 로드된 경우
+        // 이미 로드된 경우 (onload 이벤트가 발생하지 않을 수 있음)
+        if (mainImage.complete && mainImage.naturalWidth > 0 && mainImage.naturalHeight > 0) { 
             state.drawingCanvas.width = mainImage.naturalWidth;
             state.drawingCanvas.height = mainImage.naturalHeight;
             console.log(`그리기 캔버스 크기 설정됨 (이미 완료됨): ${state.drawingCanvas.width}x${state.drawingCanvas.height}`);
