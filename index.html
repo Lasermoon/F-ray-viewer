@@ -47,11 +47,57 @@
         #mainImageWrapper {
              transform-origin: 0 0; /* 일관된 확대/축소를 위해 중요합니다. */
         }
+        /* Comparison Choice Overlay styles */
+        .compare-choice-overlay, .web-image-select-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1001; /* Higher than other panels */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .compare-choice-modal, .web-image-select-modal {
+            background-color: white;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            text-align: center;
+        }
+        .web-image-select-modal {
+            width: 80%;
+            max-width: 700px;
+            max-height: 90%;
+            display: flex;
+            flex-direction: column;
+        }
+        #storageImageList {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 1rem;
+            overflow-y: auto;
+            flex-grow: 1;
+            padding: 1rem;
+        }
+        #storageImageList img {
+            width: 100%;
+            height: 100px; /* Fixed height for consistency */
+            object-fit: cover;
+        }
     </style>
 </head>
 <body class="flex h-screen bg-gray-50 text-gray-800">
     <!-- 사이드바 -->
     <aside id="sidebar" class="w-1/3 md:w-1/4 lg:w-1/5 bg-white shadow-lg flex flex-col p-4">
+        <!-- 좌측창 상단 타이틀 복구 -->
+        <header class="p-4 border-b border-gray-200">
+            <h1 class="text-xl font-bold text-gray-800">F-ray 분석 시스템</h1>
+            <p class="text-sm text-gray-500">환자 검색 및 사진 목록</p>
+        </header>
+
         <!-- 환자 검색 -->
         <div class="mb-4">
             <input type="text" id="patientSearch" placeholder="환자 검색 (이름, 차트 ID)" class="w-full p-2 border border-gray-300 rounded-md focus:ring-[#4CAF50] focus:border-[#4CAF50]">
@@ -65,7 +111,15 @@
         </div>
 
         <!-- 환자 추가 버튼 -->
-        <button id="addPatientBtn" class="w-full py-2 px-4 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold mb-4">새 환자 추가</button>
+        <button id="addPatientBtn" class="w-full py-2 px-4 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold mb-2">새 환자 추가</button>
+
+        <!-- PC에서 불러오기 & 웹에서 불러오기 버튼 복구 -->
+        <div class="flex flex-col space-y-2 mb-4">
+            <button id="uploadLocalImageBtn" class="w-full py-2 px-4 rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors duration-200 font-semibold">PC에서 불러오기</button>
+            <input type="file" id="localFileInput" accept="image/*" class="hidden">
+            <button id="uploadWebImageBtn" class="w-full py-2 px-4 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors duration-200 font-semibold">웹에서 불러오기</button>
+        </div>
+
 
         <!-- 사진 목록 섹션 (처음에는 숨겨짐) -->
         <div id="photoListSection" class="hidden flex-1 overflow-y-auto flex flex-col">
@@ -113,9 +167,7 @@
             <div class="flex space-x-2">
                 <button id="analyzeBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">AI 분석</button>
                 <button id="compareBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">사진 비교</button>
-                <button id="uploadLocalImageBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">PC에서 불러오기</button>
-                <input type="file" id="localFileInput" accept="image/*" class="hidden">
-                <button id="uploadWebImageBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">웹에서 불러오기</button>
+                <!-- PC/웹에서 불러오기 버튼은 이제 사이드바로 이동했습니다. -->
                 <button id="drawingToolsBtn" class="p-2 rounded-md bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#DCEDC8] transition-colors duration-200 font-semibold">그리기 도구</button>
                 <button id="fullScreenBtn" class="p-2 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200">전체 화면</button>
             </div>
@@ -207,6 +259,28 @@
             </div>
         </div>
     </main>
+
+    <!-- Comparison Choice Overlay (복구) -->
+    <div id="compareChoiceOverlay" class="compare-choice-overlay hidden">
+        <div class="compare-choice-modal">
+            <p class="text-lg font-semibold mb-4">몇 장의 사진을 비교하시겠습니까?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="choose2PhotosBtn" class="px-4 py-2 bg-[#4CAF50] text-white rounded-md hover:bg-[#388E3C]">2장 비교</button>
+                <button id="choose3PhotosBtn" class="px-4 py-2 bg-[#4CAF50] text-white rounded-md hover:bg-[#388E3C]">3장 비교</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web Image Select Overlay (복구) -->
+    <div id="webImageSelectOverlay" class="web-image-select-overlay hidden">
+        <div class="web-image-select-modal">
+            <h4 class="font-bold text-lg mb-4 text-gray-800">웹 이미지 선택</h4>
+            <div id="storageImageList" class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 overflow-y-auto mb-4">
+                <!-- Storage Images will be loaded here -->
+            </div>
+            <button id="closeWebImageSelectModal" class="py-2 px-4 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200">닫기</button>
+        </div>
+    </div>
 
     <script type="module" src="script.js"></script>
 </body>
