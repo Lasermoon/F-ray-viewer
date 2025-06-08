@@ -184,7 +184,8 @@
             <div id="image-container" class="flex-1 flex justify-center items-center relative overflow-hidden">
                 <!-- 이미지 플레이스홀더 (초기 상태 또는 사진 없을 때) -->
                 <div id="viewerPlaceholder" class="absolute inset-0 flex flex-col justify-center items-center text-gray-500">
-                    <svg class="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l-1.586-1.586a2 2 0 00-2.828 0L6 14m6-6l.586.586a2 2 0 002.828 0L18 8m-6 6l-1.586 1.586a2 2 0 01-2.828 0L6 14"/></svg>
+                    <!-- 첨부된 이미지 -->
+                    <img src="uploaded:F-RAY_device pic_side.jpg-db3685ae-f7a4-40e8-8f05-ad059c12d375" alt="F-ray Device" class="max-w-xs h-auto mb-4">
                     <h3 class="mt-2 text-lg font-medium">사진 뷰어</h3>
                     <p class="mt-1 text-sm">좌측에서 환자를 검색하고 사진을 선택해주세요.</p>
                 </div>
@@ -216,8 +217,11 @@
                     <button id="zoomOutBtn" class="p-2 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
                     </button>
+                    <!-- 되돌리기 버튼 아이콘 변경 -->
                     <button id="resetViewBtn" class="p-2 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356-2A8.001 8.001 0 004 12c0 2.972 1.154 5.727 3.039 7.732m0 0l-4.582 2.58m4.582-2.58h2.58m4.356-9.172v-2.58m0 0l-2.58-4.582m2.58 4.582h2.58"></path></svg>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356-2A8.001 8.001 0 004 12c0 2.972 1.154 5.727 3.039 7.732m0 0l-4.582 2.58m4.582-2.58h2.58m4.356-9.172v-2.58m0 0l-2.58-4.582m2.58 4.582h2.58"></path>
+                        </svg>
                     </button>
                 </div>
             </div>
