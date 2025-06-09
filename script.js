@@ -251,7 +251,7 @@ function renderPatientList(patients) {
     patients.forEach(patient => {
         const li = document.createElement('li'); // 새로운 리스트 아이템(li)을 만듭니다.
         // Tailwind CSS 클래스를 적용하여 스타일을 입힙니다.
-        // [변경] p-2를 py-1로, text-sm 추가
+        // [변경] p-2를 py-1 px-2로, text-sm 추가
         li.className = 'patient-list-item py-1 px-2 cursor-pointer border-b border-gray-200 flex justify-between items-center text-sm';
         // 현재 선택된 환자라면 'selected' 클래스를 추가하여 강조합니다.
         if(patient.id === state.selectedPatientId) li.classList.add('selected');
@@ -260,8 +260,8 @@ function renderPatientList(patients) {
         // [변경] 폰트 사이즈 조정
         li.innerHTML = `
             <div>
-                <p class="font-semibold text-sm"><span class="math-inline">\{patient\.name\}</p\>
-<p class\="text\-xs text\-gray\-500"\></span>{patient.chartId} | ${patient.birth}</p>
+                <p class="font-semibold text-sm">${patient.name}</p>
+                <p class="text-xs text-gray-500">${patient.chartId} | ${patient.birth}</p>
             </div>
             <span class="text-xs text-gray-400">></span>
         `;
@@ -315,7 +315,7 @@ async function selectPatient(patientId) {
 
             // 로컬 파일의 경우 Storage에 업로드
             if (file) {
-                const storageRef = ref(storage, `photos/<span class="math-inline">\{patientId\}/</span>{file.name}_${Date.now()}`);
+                const storageRef = ref(storage, `photos/${patientId}/${file.name}_${Date.now()}`);
                 const snapshot = await uploadBytes(storageRef, file);
                 imageUrlToDisplay = await getDownloadURL(snapshot.ref);
                 console.log('Staged file uploaded to Firebase Storage:', imageUrlToDisplay);
@@ -381,7 +381,7 @@ async function selectPatient(patientId) {
         if (!state.stagedPhoto && state.primaryPhotoId) {
             const currentPhoto = await getPhotoById(state.primaryPhotoId);
             if (currentPhoto) {
-                 document.getElementById('viewerPatientName').innerText = `<span class="math-inline">\{selectedPatient\.name\} \(</span>{selectedPatient.chartId})`;
+                 document.getElementById('viewerPatientName').innerText = `${selectedPatient.name} (${selectedPatient.chartId})`;
                  // [변경] 뷰어 사진 정보에 procedureStatus 추가
                  document.getElementById('viewerPhotoInfo').innerText = `${currentPhoto.date} | ${currentPhoto.mode} | ${currentPhoto.viewAngle} | ${currentPhoto.procedureStatus || 'N/A'}`;
             }
@@ -391,7 +391,7 @@ async function selectPatient(patientId) {
     }
     
     console.log('fetchPhotos 함수 호출 시작 (selectPatient).'); // 디버깅 로그 추가
-    fetchPhotos(patientId); // 필터링된 사진 목록을 불러옵니다.
+    fetchPhotos(patientId); // 필터링된 사진 목록을 다시 불러옵니다.
     console.log('selectPatient 함수 종료.'); // 디버깅 로그 추가
 }
 
@@ -490,7 +490,7 @@ function renderPhotoList(photos) {
         const divInfo = document.createElement('div');
         // [변경] 폰트 사이즈 조정 (text-xxs는 HTML 스타일 태그에 추가 정의)
         divInfo.innerHTML = `
-            <p class="font-medium text-xs"><span class="math-inline">\{photo\.mode\} \(</span>{photo.viewAngle})</p>
+            <p class="font-medium text-xs">${photo.mode} (${photo.viewAngle})</p>
             <p class="text-xxs text-gray-500">${photo.date} | ${photo.procedureStatus || 'N/A'}</p> 
         `;
 
@@ -656,8 +656,8 @@ function renderAnalysis(photo) {
                 const { wrinkles, pores, spots } = photo.ai_analysis;
                 html = `
                     <div class="space-y-3">
-                        <div><p class="font-semibold">주름</p><p class="text-blue-600"><span class="math-inline">\{wrinkles\} 개</p\></div\>
-<div\><p class\="font\-semibold"\>모공</p\><p class\="text\-blue\-600"\></span>{pores} %</p></div>
+                        <div><p class="font-semibold">주름</p><p class="text-blue-600">${wrinkles} 개</p></div>
+                        <div><p class="font-semibold">모공</p><p class="text-blue-600">${pores} %</p></div>
                         <div><p class="font-semibold">색소침착</p><p class="text-blue-600">${spots} 개</p></div>
                     </div>
                 `;
@@ -706,8 +706,8 @@ function renderAnalysis(photo) {
                 const { pigmentation, sebum } = photo.ai_analysis;
                 html = `
                     <div class="space-y-3">
-                        <div><p class="font-semibold">잠재 색소</p><p class="text-purple-600"><span class="math-inline">\{pigmentation\} / 100</p\></div\>
-<div\><p class\="font\-semibold"\>피지량</p\><p class\="text\-orange\-600"\></span>{sebum} / 100</p></div>
+                        <div><p class="font-semibold">잠재 색소</p><p class="text-purple-600">${pigmentation} / 100</p></div>
+                        <div><p class="font-semibold">피지량</p><p class="text-orange-600">${sebum} / 100</p></div>
                     </div>
                 `;
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.15)'; // 빨간색 (투명도 15%)
@@ -867,7 +867,7 @@ async function updateComparisonDisplay() {
                 // Store photoId on wrapper for drag/drop
                 wrapperEl.dataset.photoId = photo.id;
                 // 시술 상태 정보도 infoTexts에 포함
-                infoTexts.push(`<span class="math-inline">\{photo\.date\} \(</span>{photo.mode} ${photo.viewAngle} ${photo.procedureStatus || ''})`);
+                infoTexts.push(`${photo.date} (${photo.mode} ${photo.viewAngle} ${photo.procedureStatus || ''})`);
 
                 // 이미지 로딩 후 변환 적용을 위한 onload 핸들러 추가
                 imgEl.onload = () => {
@@ -914,7 +914,7 @@ async function updateComparisonDisplay() {
     }
 
     if (patientData) {
-        viewerPatientName.innerText = `<span class="math-inline">\{patientData\.name\} \(</span>{patientData.chartId})`;
+        viewerPatientName.innerText = `${patientData.name} (${patientData.chartId})`;
     } else {
         viewerPatientName.innerText = '사진 뷰어';
     }
@@ -983,7 +983,7 @@ function applyTransforms() {
     // 각 이미지에 변환을 적용합니다.
     images.forEach(img => {
         if (!img.classList.contains('hidden')) {
-            img.style.transform = `translate(${state.currentTranslateX}px, <span class="math-inline">\{state\.currentTranslateY\}px\) scale\(</span>{state.currentZoomLevel})`;
+            img.style.transform = `translate(${state.currentTranslateX}px, ${state.currentTranslateY}px) scale(${state.currentZoomLevel})`;
         }
     });
     // 캔버스 변환은 메인 이미지의 변환과 일치해야 합니다.
@@ -1235,7 +1235,7 @@ async function handleLocalFileSelect(event) {
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
         if (datePart.length === 8 && !isNaN(datePart)) { //InstrumentedTestMMDD 형식 확인
-            photoDate = `<span class="math-inline">\{datePart\.slice\(0, 4\)\}\-</span>{datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
+            photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
         if (parts.length >= 6) { // [변경] 여섯 번째 파트: 시술 상태
             procedureStatus = parts[5];
@@ -1336,7 +1336,7 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
         if (datePart.length === 8 && !isNaN(datePart)) {
-            photoDate = `<span class="math-inline">\{datePart\.slice\(0, 4\)\}\-</span>{datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
+            photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
         if (parts.length >= 6) { // [변경] 여섯 번째 파트: 시술 상태
             procedureStatus = parts[5];
@@ -1385,7 +1385,7 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
         if (sourceType === 'local') {
             const file = source;
             // 파일 이름을 고유하게 만들기 위해 타임스탬프 추가
-            const storageRef = ref(storage, `photos/<span class="math-inline">\{patientId\}/</span>{file.name}_${Date.now()}`);
+            const storageRef = ref(storage, `photos/${patientId}/${file.name}_${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             imageUrlToDisplay = await getDownloadURL(snapshot.ref);
             console.log('File uploaded to Firebase Storage:', imageUrlToDisplay);
@@ -1569,7 +1569,7 @@ async function deletePhoto(photoId) {
         }
 
     } catch (error) {
-         console.error("사진 삭제 중 오류 발생:", error); // 잘렸던 부분
+        console.error("사진 삭제 중 오류 발생:", error);
         alert("사진 삭제에 실패했습니다: " + error.message);
     }
 }
