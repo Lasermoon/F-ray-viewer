@@ -506,12 +506,26 @@ function renderPhotoList(photos) {
     });
 }
 
+// script.js (수정된 최종 버전)
+// ... (이전 코드는 동일)
+
 // selectPhoto: 사진을 선택했을 때 실행되는 함수입니다.
 async function selectPhoto(photoId) {
     console.log('selectPhoto 호출됨. photoId:', photoId); // 디버깅 로그 추가
     state.stagedPhoto = null; // Staged photo 초기화
 
-    // Fetch the selected photo to get its full data
+    // [변경] AI 분석 패널이 열려있다면, 새 사진 선택 시 AI 분석을 초기화하고 패널을 닫습니다.
+    if (state.isAnalysisPanelVisible) {
+        state.isAnalysisPanelVisible = false; // 상태 업데이트
+        document.getElementById('analysisPanel').classList.add('hidden'); // 패널 숨김
+        document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
+        document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        clearAnalysis(); // 캔버스 내용 지움
+        document.getElementById('analysisCanvas').classList.add('hidden'); // 캔버스 숨김
+        console.log('새 사진 선택으로 인해 AI 분석 패널 및 캔버스 초기화됨.');
+    }
+
+
     const photo = await getPhotoById(photoId);
 
     if (!photo) {
@@ -521,12 +535,13 @@ async function selectPhoto(photoId) {
 
     if (state.isCompareSelectionActive) { // If in the process of selecting photos for comparison
         console.log('비교 사진 선택 중. 현재 단계:', state.compareSelectionStep);
-        // Hide analysis panel if visible
-        state.isAnalysisPanelVisible = false;
-        document.getElementById('analysisPanel').classList.add('hidden');
-        document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
-        document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
-        clearAnalysis();
+        // Hide analysis panel if visible (이미 위에서 처리함)
+        // state.isAnalysisPanelVisible = false;
+        // document.getElementById('analysisPanel').classList.add('hidden');
+        // document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
+        // document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        // clearAnalysis();
+        // document.getElementById('analysisCanvas').classList.add('hidden'); // 캔버스 숨김
 
         if (state.compareSelectionStep === 1) { // Selecting the second photo
             if (photoId === state.comparePhotoIds[0]) {
@@ -587,7 +602,7 @@ function toggleAnalysisPanel() {
     state.isAnalysisPanelVisible = !state.isAnalysisPanelVisible; // 상태를 토글합니다.
     const panel = document.getElementById('analysisPanel');
     const btn = document.getElementById('analyzeBtn');
-    const analysisCanvas = document.getElementById('analysisCanvas'); // [추가] 캔버스 요소 가져오기
+    const analysisCanvas = document.getElementById('analysisCanvas'); // 캔버스 요소 가져오기
 
     console.log('AI 분석 버튼 클릭됨. 현재 isAnalysisPanelVisible:', state.isAnalysisPanelVisible);
     console.log('현재 primaryPhotoId:', state.primaryPhotoId);
@@ -595,7 +610,7 @@ function toggleAnalysisPanel() {
     if (state.isAnalysisPanelVisible) { // 패널을 보이게 할 때
         panel.classList.remove('hidden'); // 패널을 보입니다.
         btn.classList.add('bg-[#4CAF50]', 'text-white'); // 버튼 색상을 변경하여 활성화 상태를 표시합니다.
-        analysisCanvas.classList.remove('hidden'); // [추가] 캔버스를 보이게 합니다.
+        analysisCanvas.classList.remove('hidden'); // 캔버스를 보이게 합니다.
         
         if (state.primaryPhotoId) {
             getDoc(doc(db, 'photos', state.primaryPhotoId))
@@ -631,10 +646,12 @@ function toggleAnalysisPanel() {
         btn.classList.remove('bg-[#4CAF50]', 'text-white'); 
         btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
         clearAnalysis(); // 분석 내용을 지웁니다.
-        analysisCanvas.classList.add('hidden'); // [추가] 캔버스를 숨깁니다.
+        analysisCanvas.classList.add('hidden'); // [변경] 캔버스를 숨깁니다.
         console.log('AI 분석 패널이 숨겨졌습니다.');
     }
 }
+
+// ... (나머지 코드는 동일)
 
 // renderAnalysis: 선택된 사진의 AI 분석 결과를 캔버스에 그리고 패널에 표시합니다.
 // 이제 Firestore에서 가져온 photo 객체의 ai_analysis 데이터를 사용합니다.
