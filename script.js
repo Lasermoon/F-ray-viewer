@@ -587,6 +587,7 @@ function toggleAnalysisPanel() {
     state.isAnalysisPanelVisible = !state.isAnalysisPanelVisible; // 상태를 토글합니다.
     const panel = document.getElementById('analysisPanel');
     const btn = document.getElementById('analyzeBtn');
+    const analysisCanvas = document.getElementById('analysisCanvas'); // [추가] 캔버스 요소 가져오기
 
     console.log('AI 분석 버튼 클릭됨. 현재 isAnalysisPanelVisible:', state.isAnalysisPanelVisible);
     console.log('현재 primaryPhotoId:', state.primaryPhotoId);
@@ -594,6 +595,7 @@ function toggleAnalysisPanel() {
     if (state.isAnalysisPanelVisible) { // 패널을 보이게 할 때
         panel.classList.remove('hidden'); // 패널을 보입니다.
         btn.classList.add('bg-[#4CAF50]', 'text-white'); // 버튼 색상을 변경하여 활성화 상태를 표시합니다.
+        analysisCanvas.classList.remove('hidden'); // [추가] 캔버스를 보이게 합니다.
         
         if (state.primaryPhotoId) {
             getDoc(doc(db, 'photos', state.primaryPhotoId))
@@ -629,6 +631,7 @@ function toggleAnalysisPanel() {
         btn.classList.remove('bg-[#4CAF50]', 'text-white'); 
         btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
         clearAnalysis(); // 분석 내용을 지웁니다.
+        analysisCanvas.classList.add('hidden'); // [추가] 캔버스를 숨깁니다.
         console.log('AI 분석 패널이 숨겨졌습니다.');
     }
 }
