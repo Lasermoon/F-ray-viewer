@@ -96,7 +96,7 @@ function setupEventListeners() {
 
     // 촬영 날짜 필터 (새로 추가)
     document.getElementById('photoDateFilter').addEventListener('change', (e) => {
-        state.currentDateFilter = e.target.value; //InstrumentedTest-MM-DD 형식으로 저장
+        state.currentDateFilter = e.target.value; // YYYY-MM-DD 형식으로 저장
         fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
     });
 
@@ -367,7 +367,7 @@ async function selectPatient(patientId) {
             if (currentPhoto) {
                  document.getElementById('viewerPatientName').innerText = `${selectedPatient.name} (${selectedPatient.chartId})`;
                  // [변경] 뷰어 사진 정보에 procedureStatus 추가
-                 document.getElementById('viewerPhotoInfo').innerText = `${currentPhoto.date} | ${currentPhoto.mode} | ${currentPhoto.viewAngle} | ${currentPhoto.procedureStatus || 'N/A'}`;
+                 document.getElementById('viewerPhotoInfo').innerText = `${currentPhoto.date} | ${currentPhoto.mode} | ${currentPhoto.viewAngle} | ${currentPhoto.procedureStatus}`;
             }
         }
     } else {
@@ -809,11 +809,6 @@ async function updateComparisonDisplay() {
         el.wrapper.classList.remove('flex-1', 'w-full');
         document.getElementById(el.id).src = '';
         el.wrapper.dataset.photoId = ''; // Data ID 초기화
-        // [변경] 기존 onload 핸들러가 있다면 제거
-        const imgEl = document.getElementById(el.id);
-        if (imgEl) {
-            imgEl.onload = null;
-        }
     });
 
 
@@ -832,24 +827,6 @@ async function updateComparisonDisplay() {
                 wrapperEl.dataset.photoId = photo.id;
                 // [변경] 시술 상태 정보도 infoTexts에 포함
                 infoTexts.push(`${photo.date} (${photo.mode} ${photo.viewAngle} ${photo.procedureStatus || ''})`);
-
-                // [변경] 이미지 로딩 후 변환 적용을 위한 onload 핸들러 추가
-                imgEl.onload = () => {
-                    console.log(`Image loaded: ${photo.url}`);
-                    applyTransforms(); // 이 이미지에 대한 변환 재적용
-                    // 만약 분석 패널이 활성화되어 있고 현재 이미지가 primaryPhotoId라면 분석 결과도 다시 렌더링
-                    if (state.isAnalysisPanelVisible && photo.id === state.primaryPhotoId) {
-                        renderAnalysis(photo);
-                    }
-                };
-                // [변경] 이미지 로딩 에러 핸들링 (선택 사항이지만 디버깅에 유용)
-                imgEl.onerror = () => {
-                    console.error(`Error loading image: ${photo.url}`);
-                    // 대체 이미지 표시 또는 사용자에게 알림 등
-                    imgEl.src = 'https://via.placeholder.com/150?text=Image+Load+Error'; // 임시 에러 이미지
-                };
-
-
                 if (!patientData) { // Fetch patient data only once from the first available photo
                     const patientDoc = await getDoc(doc(db, 'patients', photo.patientId));
                     patientData = patientDoc.exists() ? patientDoc.data() : null;
@@ -1135,12 +1112,6 @@ async function handleDrop(e) {
     }
 }
 
-// handleDragEnd: 드래그가 끝날 때 (성공/실패 무관) 호출
-function handleDragEnd(e) {
-    console.log('Drag End Event:', e.target.closest('.image-wrapper')?.id);
-    e.target.closest('.image-wrapper')?.classList.remove('dragging-source'); // 소스 피드백 제거
-}
-
 // generateSampleAIAnalysis: 모드에 따라 샘플 AI 분석 데이터를 생성합니다.
 function generateSampleAIAnalysis(mode) {
     let analysis = {};
@@ -1198,7 +1169,7 @@ async function handleLocalFileSelect(event) {
         photoMode = parts[2]; // 세 번째 파트: 촬영모드
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
-        if (datePart.length === 8 && !isNaN(datePart)) { //InstrumentedTestMMDD 형식 확인
+        if (datePart.length === 8 && !isNaN(datePart)) { // YYYYMMDD 형식 확인
             photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
         if (parts.length >= 6) { // [변경] 여섯 번째 파트: 시술 상태
