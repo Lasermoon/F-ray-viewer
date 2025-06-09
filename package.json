@@ -1,0 +1,23 @@
+{
+  "name": "f-ray_viewer_project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "admin-update-script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lasermoon/F-ray-viewer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase-admin": "^11.11.1" 
+  },
+  "bugs": {
+    "url": "https://github.com/Lasermoon/F-ray-viewer/issues"
+  },
+  "homepage": "https://github.com/Lasermoon/F-ray-viewer#readme"
+}
