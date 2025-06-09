@@ -35,7 +35,6 @@ const state = {
     currentModeFilter: 'all', // 기존 currentFilter의 이름을 변경하여 용도를 명확히 함
     currentDateFilter: '', // 촬영 날짜 필터 추가 (YYYY-MM-DD)
     currentAngleFilter: 'all', // 각도 필터 추가
-    currentProcedureStatusFilter: 'all', // [변경] 시술 상태 필터 추가
     isAnalysisPanelVisible: false, // 분석 패널이 보이는지 여부
     isCompareSelectionActive: false, // 사용자가 비교 모드 선택 중 (2장/3장 선택 중)
     isComparingPhotos: false, // 2장 또는 3장의 사진이 실제로 뷰어에 표시되어 비교 중인 상태 (이 상태에서 드래그앤드롭 가능)
@@ -52,7 +51,7 @@ const state = {
     currentTranslateY: 0, // 현재 Y축 이동량 (팬/줌용)
     lastTranslateX: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
     lastTranslateY: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
-    stagedPhoto: null, // { url: string, mode: string, viewAngle: string, file: File | null, procedureStatus: string } - 환자 미지정 상태의 사진 [변경] procedureStatus 추가
+    stagedPhoto: null, // { url: string, mode: string, viewAngle: string, file: File | null } - 환자 미지정 상태의 사진
 };
 
 // DOMContentLoaded: 웹 페이지의 모든 HTML이 로드되면 실행되는 부분입니다.
@@ -96,7 +95,7 @@ function setupEventListeners() {
 
     // 촬영 날짜 필터 (새로 추가)
     document.getElementById('photoDateFilter').addEventListener('change', (e) => {
-        state.currentDateFilter = e.target.value; // YYYY-MM-DD 형식으로 저장
+        state.currentDateFilter = e.target.value; //InstrumentedTest-MM-DD 형식으로 저장
         fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
     });
 
@@ -105,16 +104,6 @@ function setupEventListeners() {
         state.currentAngleFilter = e.target.value; // 선택된 각도 값 저장
         fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
     });
-
-    // [변경] 시술 상태 필터 (새로 추가)
-    // index.html에 #photoProcedureStatusFilter id를 가진 select 태그가 있다고 가정합니다.
-    const photoProcedureStatusFilter = document.getElementById('photoProcedureStatusFilter');
-    if (photoProcedureStatusFilter) {
-        photoProcedureStatusFilter.addEventListener('change', (e) => {
-            state.currentProcedureStatusFilter = e.target.value; // 선택된 시술 상태 값 저장
-            fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
-        });
-    }
 
 
     // 주요 기능 버튼에 클릭 이벤트를 연결합니다.
@@ -202,7 +191,7 @@ async function fetchPatients(searchTerm = '') {
     try {
         const patientsCol = collection(db, 'patients'); // 'patients' 컬렉션 참조
         const patientSnapshot = await getDocs(patientsCol); // 모든 환자 문서 가져오기
-        const patients = patientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const patients = patientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // 문서 데이터 가공
         
         if (patientSnapshot.empty) {
             console.log('Firestore에 환자 문서가 없습니다.'); // Debug log
@@ -294,7 +283,8 @@ async function selectPatient(patientId) {
     if (state.stagedPhoto && state.selectedPatientId === null) {
         try {
             // stagedPhoto를 현재 선택된 환자에게 연결하여 Firestore에 저장합니다.
-            const { url, mode, viewAngle, file, ai_analysis, date, procedureStatus } = state.stagedPhoto; // [변경] procedureStatus 추가
+            const { url, mode, viewAngle, file, ai_analysis } = state.stagedPhoto;
+            const photoDate = new Date().toISOString().slice(0, 10);
             let imageUrlToDisplay = url;
 
             // 로컬 파일의 경우 Storage에 업로드
@@ -310,10 +300,9 @@ async function selectPatient(patientId) {
                 url: imageUrlToDisplay,
                 mode: mode,
                 viewAngle: viewAngle,
-                date: date, // staged photo에서 가져온 date
+                date: photoDate,
                 uploadedAt: new Date(),
-                ai_analysis: ai_analysis, // staged photo에서 가져온 AI 분석 데이터
-                procedureStatus: procedureStatus // [변경] staged photo에서 가져온 시술 상태
+                ai_analysis: ai_analysis // staged photo에서 가져온 AI 분석 데이터
             };
             const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
             state.primaryPhotoId = docRef.id; // 새로 저장된 사진의 ID를 primaryPhotoId로 설정
@@ -332,16 +321,9 @@ async function selectPatient(patientId) {
     state.currentModeFilter = 'all';
     state.currentDateFilter = '';
     state.currentAngleFilter = 'all';
-    state.currentProcedureStatusFilter = 'all'; // [변경] 시술 상태 필터 초기화
 
     document.getElementById('photoDateFilter').value = '';
     document.getElementById('photoAngleFilter').value = 'all';
-    // [변경] 시술 상태 필터도 초기화
-    const photoProcedureStatusFilter = document.getElementById('photoProcedureStatusFilter');
-    if (photoProcedureStatusFilter) {
-        photoProcedureStatusFilter.value = 'all';
-    }
-
     const photoModeFilterBtns = document.querySelectorAll('.photo-mode-filter-btn');
     photoModeFilterBtns.forEach(b => {
         if (b.dataset.filter === 'all') {
@@ -366,8 +348,7 @@ async function selectPatient(patientId) {
             const currentPhoto = await getPhotoById(state.primaryPhotoId);
             if (currentPhoto) {
                  document.getElementById('viewerPatientName').innerText = `${selectedPatient.name} (${selectedPatient.chartId})`;
-                 // [변경] 뷰어 사진 정보에 procedureStatus 추가
-                 document.getElementById('viewerPhotoInfo').innerText = `${currentPhoto.date} | ${currentPhoto.mode} | ${currentPhoto.viewAngle} | ${currentPhoto.procedureStatus}`;
+                 document.getElementById('viewerPhotoInfo').innerText = `${currentPhoto.date} | ${currentPhoto.mode} | ${currentPhoto.viewAngle}`;
             }
         }
     } else {
@@ -406,10 +387,6 @@ async function fetchPhotos(patientId) {
         // 각도 필터 적용
         if (state.currentAngleFilter !== 'all') {
             q = query(q, where('viewAngle', '==', state.currentAngleFilter));
-        }
-        // [변경] 시술 상태 필터 적용
-        if (state.currentProcedureStatusFilter !== 'all') {
-            q = query(q, where('procedureStatus', '==', state.currentProcedureStatusFilter));
         }
 
         const photoSnapshot = await getDocs(q);
@@ -454,12 +431,11 @@ function renderPhotoList(photos) {
         if(photo.id === state.primaryPhotoId || photo.id === state.secondaryPhotoId || photo.id === state.tertiaryPhotoId) li.classList.add('selected');
 
         // 사진 썸네일과 정보를 li 안에 넣어줍니다.
-        // [변경] 사진 정보에 procedureStatus 추가
         li.innerHTML = `
             <img src="${photo.url}" alt="${photo.mode}" class="w-16 h-16 object-cover rounded-md mb-2">
             <div>
                 <p class="font-medium text-sm">${photo.mode} (${photo.viewAngle})</p>
-                <p class="text-xs text-gray-500">${photo.date} | ${photo.procedureStatus || 'N/A'}</p> 
+                <p class="text-xs text-gray-500">${photo.date}</p>
             </div>
         `;
         // li를 클릭하면 selectPhoto 함수가 호출되도록 이벤트를 연결합니다.
@@ -825,8 +801,7 @@ async function updateComparisonDisplay() {
                 wrapperEl.classList.add('flex-1');
                 // Store photoId on wrapper for drag/drop
                 wrapperEl.dataset.photoId = photo.id;
-                // [변경] 시술 상태 정보도 infoTexts에 포함
-                infoTexts.push(`${photo.date} (${photo.mode} ${photo.viewAngle} ${photo.procedureStatus || ''})`);
+                infoTexts.push(`${photo.date} (${photo.mode} ${photo.viewAngle})`);
                 if (!patientData) { // Fetch patient data only once from the first available photo
                     const patientDoc = await getDoc(doc(db, 'patients', photo.patientId));
                     patientData = patientDoc.exists() ? patientDoc.data() : null;
@@ -1112,6 +1087,12 @@ async function handleDrop(e) {
     }
 }
 
+// handleDragEnd: 드래그가 끝날 때 (성공/실패 무관) 호출
+function handleDragEnd(e) {
+    console.log('Drag End Event:', e.target.closest('.image-wrapper')?.id);
+    e.target.closest('.image-wrapper')?.classList.remove('dragging-source'); // 소스 피드백 제거
+}
+
 // generateSampleAIAnalysis: 모드에 따라 샘플 AI 분석 데이터를 생성합니다.
 function generateSampleAIAnalysis(mode) {
     let analysis = {};
@@ -1156,28 +1137,24 @@ async function handleLocalFileSelect(event) {
 
     // 파일 이름과 확장자를 가져옵니다.
     const fileName = file.name;
-    const baseName = fileName.split('.')[0]; // 확장자 제외한 이름 (예: 문성희_01022554520_F-ray_C0_20250529_Before)
+    const baseName = fileName.split('.')[0]; // 확장자 제외한 이름 (예: 문성희_01022554520_F-ray_C0_20250529)
     const parts = baseName.split('_'); // 언더스코어(_)로 분리
 
     let photoMode = 'PC Upload'; // 기본 모드
     let viewAngle = 'C0'; // 기본 뷰 각도
     let photoDate = new Date().toISOString().slice(0, 10); // 기본 촬영 날짜 (업로드 날짜)
-    let procedureStatus = 'None'; // [변경] 기본 시술 상태
 
-    // 파일 이름에서 모드, 각도, 날짜, 시술 상태 유추 (형식: 이름_전화번호_촬영모드_각도_촬영일자_시술상태.jpg)
-    if (parts.length >= 5) { // 최소 5개의 파트가 있을 때 파싱
+    // 파일 이름에서 모드, 각도, 날짜 유추 (형식: 이름_전화번호_촬영모드_각도_촬영일자.jpg)
+    if (parts.length >= 5) { // 최소 5개의 파트가 있을 때만 파싱
         photoMode = parts[2]; // 세 번째 파트: 촬영모드
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
-        if (datePart.length === 8 && !isNaN(datePart)) { // YYYYMMDD 형식 확인
+        if (datePart.length === 8 && !isNaN(datePart)) { //InstrumentedTestMMDD 형식 확인
             photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
-        }
-        if (parts.length >= 6) { // [변경] 여섯 번째 파트: 시술 상태
-            procedureStatus = parts[5];
         }
     } else {
         // 파일명 형식이 맞지 않을 경우 기본값 사용 또는 경고
-        console.warn("Filename format is not as expected: 이름_전화번호_촬영모드_각도_촬영일자_시술상태.jpg. Using default values for mode/angle/date/procedureStatus.");
+        console.warn("Filename format is not as expected: 이름_전화번호_촬영모드_각도_촬영일자.jpg. Using default values for mode/angle/date.");
     }
     
     // AI 분석 데이터 생성
@@ -1185,15 +1162,13 @@ async function handleLocalFileSelect(event) {
 
     // 환자가 선택되지 않았을 경우, 일단 사진을 뷰어에 표시하고 stagedPhoto에 저장
     if (!state.selectedPatientId) {
-        // [변경] displayImageWithoutSaving에 procedureStatus 전달
-        await displayImageWithoutSaving(file, 'local', photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatus);
+        await displayImageWithoutSaving(file, 'local', photoMode, viewAngle, photoDate, aiAnalysisData);
         alert("사진이 뷰어에 불러와졌습니다. 사진을 저장하려면 좌측에서 환자를 선택하거나 '새 환자 추가' 버튼을 이용하세요.");
         return;
     }
 
     // 환자가 선택되어 있다면 바로 Firestore에 저장 및 표시
-    // [변경] displayImageAndSave에 procedureStatus 전달
-    await displayImageAndSave(file, 'local', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatus); 
+    await displayImageAndSave(file, 'local', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData); 
 }
 
 // showWebImageSelectModal: 웹 이미지 선택 모달을 표시하고 Storage에서 이미지 목록을 불러옵니다.
@@ -1220,7 +1195,7 @@ async function showWebImageSelectModal() {
 
         for (const itemRef of res.items) {
             const imageUrl = await getDownloadURL(itemRef);
-            const fileName = itemRef.name; // 파일 이름 (예: 'Portrait_C0_Before.jpg')
+            const fileName = itemRef.name; // 파일 이름 (예: 'Portrait_C0.jpg')
 
             const imgDiv = document.createElement('div');
             imgDiv.className = 'relative flex flex-col items-center justify-center p-2 border rounded-md hover:shadow-lg transition-shadow';
@@ -1250,9 +1225,8 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
     let photoMode = 'Web URL'; // 기본 모드
     let viewAngle = 'C0'; // 기본 뷰 각도
     let photoDate = new Date().toISOString().slice(0, 10); // 기본 촬영 날짜 (현재 날짜)
-    let procedureStatus = 'None'; // [변경] 기본 시술 상태
 
-    // 파일 이름에서 모드, 각도, 날짜, 시술 상태 유추 (형식: 이름_전화번호_촬영모드_각도_촬영일자_시술상태.jpg)
+    // 파일 이름에서 모드, 각도, 날짜 유추 (형식: 이름_전화번호_촬영모드_각도_촬영일자.jpg)
     if (parts.length >= 5) {
         photoMode = parts[2]; // 세 번째 파트: 촬영모드
         viewAngle = parts[3]; // 네 번째 파트: 각도
@@ -1260,11 +1234,8 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
         if (datePart.length === 8 && !isNaN(datePart)) {
             photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
-        if (parts.length >= 6) { // [변경] 여섯 번째 파트: 시술 상태
-            procedureStatus = parts[5];
-        }
     } else {
-        console.warn("Filename format is not as expected for web image: 이름_전화번호_촬영모드_각도_촬영일자_시술상태.jpg. Using default values for mode/angle/date/procedureStatus.");
+        console.warn("Filename format is not as expected for web image: 이름_전화번호_촬영모드_각도_촬영일자.jpg. Using default values for mode/angle/date.");
     }
     
     // AI 분석 데이터 생성
@@ -1272,21 +1243,18 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
 
     // 환자가 선택되지 않았을 경우, 일단 사진을 뷰어에 표시하고 stagedPhoto에 저장
     if (!state.selectedPatientId) {
-        // [변경] displayImageWithoutSaving에 procedureStatus 전달
-        await displayImageWithoutSaving(imageUrl, 'web', photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatus);
+        await displayImageWithoutSaving(imageUrl, 'web', photoMode, viewAngle, photoDate, aiAnalysisData);
         alert("사진이 뷰어에 불러와졌습니다. 사진을 저장하려면 좌측에서 환자를 선택하거나 '새 환자 추가' 버튼을 이용하세요.");
         return;
     }
 
     // 환자가 선택되어 있다면 바로 Firestore에 저장 및 표시
-    // [변경] displayImageAndSave에 procedureStatus 전달
-    await displayImageAndSave(imageUrl, 'web', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatus);
+    await displayImageAndSave(imageUrl, 'web', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData);
 }
 
 
 // displayImageAndSave: 이미지를 뷰어에 표시하고 Firestore에 저장합니다. (환자 ID가 있을 때)
-// [변경] procedureStatus 파라미터 추가
-async function displayImageAndSave(source, sourceType, patientId, photoMode, viewAngle, photoDate, aiAnalysisData = {}, procedureStatus = 'None') {
+async function displayImageAndSave(source, sourceType, patientId, photoMode, viewAngle, photoDate, aiAnalysisData = {}) {
     console.log("displayImageAndSave 함수 실행됨. sourceType:", sourceType, "patientId:", patientId); // 디버깅 로그 추가
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
@@ -1325,7 +1293,6 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
             date: photoDate, // 파싱된 photoDate 사용
             uploadedAt: new Date(),
             ai_analysis: aiAnalysisData, // AI 분석 데이터 포함
-            procedureStatus: procedureStatus, // [변경] 시술 상태 포함
         };
         const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
         state.primaryPhotoId = docRef.id; // Firestore 문서 ID를 primaryPhotoId로 사용
@@ -1347,8 +1314,7 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
 }
 
 // displayImageWithoutSaving: 이미지를 뷰어에 표시하지만 Firestore에는 저장하지 않습니다. (환자 ID가 없을 때)
-// [변경] procedureStatus 파라미터 추가
-async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngle, photoDate, aiAnalysisData = {}, procedureStatus = 'None') {
+async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngle, photoDate, aiAnalysisData = {}) {
     console.log("displayImageWithoutSaving 함수 실행됨. sourceType:", sourceType); // 디버깅 로그 추가
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
@@ -1369,12 +1335,10 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
         if (sourceType === 'local') {
             // 로컬 파일은 임시 URL을 사용합니다.
             imageUrlToDisplay = URL.createObjectURL(source);
-            // [변경] stagedPhoto에 procedureStatus 추가
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData, procedureStatus: procedureStatus };
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData };
         } else if (sourceType === 'web') {
             imageUrlToDisplay = source;
-            // [변경] stagedPhoto에 procedureStatus 추가
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData, procedureStatus: procedureStatus };
+            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData };
         }
         
         state.primaryPhotoId = null; // stagedPhoto는 아직 Firestore ID가 없음
@@ -1401,8 +1365,7 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
         imageContainer.classList.add('flex-col');
 
         viewerPatientName.innerText = `환자 미지정 - 선택 필요`;
-        // [변경] 뷰어 사진 정보에 procedureStatus 추가
-        viewerPhotoInfo.innerText = `${photoDate} | ${photoMode} | ${viewAngle} | ${procedureStatus}`;
+        viewerPhotoInfo.innerText = `${photoDate} | ${photoMode} | ${viewAngle}`;
 
         resetZoomAndPan();
         state.isAnalysisPanelVisible = false;
