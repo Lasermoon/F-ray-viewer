@@ -26,3 +26,5 @@ AppData/
 Local/
 .cache/
 .temp/
+# Firebase 서비스 계정 키 파일 (절대 GitHub에 올리지 마세요!)
+frayviewer-63e13-firebase-adminsdk-fbsvc-438da4d463.json

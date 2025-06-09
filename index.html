@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>F-ray Viewer</title>
-    <!-- Tailwind CSS CDN을 추가합니다. -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -82,86 +81,68 @@
             /* 캔버스 자체의 transform은 JS에서 applyTransforms 함수로 제어 */
             transform-origin: top left; /* 확대/축소 기준점 */
         }
+
+        /* 폰트 사이즈 xxs (Tailwind 기본에 없음, 커스텀 정의) */
+        .text-xxs {
+            font-size: 0.65rem; /* 약 10.4px */
+            line-height: 0.8rem; /* 약 12.8px */
+        }
     </style>
 </head>
 <body class="font-inter antialiased flex h-screen overflow-hidden bg-gray-100">
-    <!-- 메인 레이아웃 -->
     <div class="flex flex-1 overflow-hidden">
-        <!-- 사이드바 (환자 및 사진 목록) -->
         <aside id="sidebar" class="w-1/3 md:w-1/3 lg:w-1/4 bg-white p-4 flex flex-col shadow-lg overflow-y-auto">
             <h1 class="text-2xl font-bold mb-4 text-gray-800">F-ray Viewer</h1>
             
-            <!-- 환자 검색 및 추가 -->
-            <div class="mb-4 flex space-x-2">
-                <input type="text" id="patientSearch" placeholder="환자 이름 또는 차트 ID 검색"
-                       class="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                <button id="addPatientBtn"
-                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 shadow-md">
-                    + 환자
+            <div class="mb-2 flex space-x-2"> <input type="text" id="patientSearch" placeholder="환자 이름 또는 차트 ID 검색"
+                       class="flex-1 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"> <button id="addPatientBtn"
+                        class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 shadow-md text-sm"> + 환자
                 </button>
             </div>
 
-            <!-- 환자 목록 -->
-            <div class="flex-1 overflow-y-auto border border-gray-200 rounded-md mb-4 bg-gray-50">
-                <ul id="patientList" class="divide-y divide-gray-200">
-                    <!-- 환자 목록이 여기에 동적으로 로드됩니다. -->
-                    <p class="text-center text-gray-500 py-4">환자 목록을 불러오는 중...</p>
-                </ul>
+            <div class="flex-1 overflow-y-auto border border-gray-200 rounded-md mb-2 bg-gray-50"> <ul id="patientList" class="divide-y divide-gray-200">
+                    <p class="text-center text-gray-500 py-2 text-sm">환자 목록을 불러오는 중...</p> </ul>
             </div>
 
-            <!-- 사진 목록 섹션 (환자 선택 시 표시) -->
             <div id="photoListSection" class="flex-1 overflow-y-auto border border-gray-200 rounded-md bg-gray-50 hidden">
-                <h2 id="photoListHeader" class="text-lg font-semibold p-3 bg-gray-100 border-b border-gray-200 sticky top-0 z-10 text-gray-700">
-                    선택된 환자의 사진 목록
+                <h2 id="photoListHeader" class="text-base font-semibold p-2 bg-gray-100 border-b border-gray-200 sticky top-0 z-10 text-gray-700"> 선택된 환자의 사진 목록
                 </h2>
-                <!-- 사진 필터링 옵션 -->
-                <div class="p-3 bg-white border-b border-gray-200 sticky top-12 z-10 flex flex-col space-y-2">
-                    <div class="flex justify-around text-sm font-medium text-center">
-                        <button class="photo-mode-filter-btn flex-1 p-2 rounded-l-md bg-[#4CAF50] text-white hover:bg-opacity-90 transition-colors duration-200" data-filter="all">전체</button>
-                        <button class="photo-mode-filter-btn flex-1 p-2 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200" data-filter="F-ray">F-ray</button>
-                        <button class="photo-mode-filter-btn flex-1 p-2 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200" data-filter="Portrait">Portrait</button>
-                        <button class="photo-mode-filter-btn flex-1 p-2 rounded-r-md bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200" data-filter="UV">UV</button>
-                    </div>
-                    <div class="flex space-x-2 mt-2">
-                        <input type="date" id="photoDateFilter"
-                               class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                <div class="p-2 bg-white border-b border-gray-200 sticky top-9 z-10 flex flex-col space-y-1"> <div class="flex justify-around text-sm font-medium text-center">
+                        <button class="photo-mode-filter-btn flex-1 p-1 rounded-l-md bg-[#4CAF50] text-white hover:bg-opacity-90 transition-colors duration-200 text-xs" data-filter="all">전체</button> <button class="photo-mode-filter-btn flex-1 p-1 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="F-ray">F-ray</button> <button class="photo-mode-filter-btn flex-1 p-1 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="Portrait">Portrait</button> <button class="photo-mode-filter-btn flex-1 p-1 rounded-r-md bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="UV">UV</button> </div>
+                    <div class="flex space-x-1 mt-1"> <input type="date" id="photoDateFilter"
+                               class="flex-1 p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary"> <select id="photoProcedureStatusFilter"
+                                class="p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary"> <option value="all">모든 시술시기</option>
+                            <option value="Before">시술 전</option>
+                            <option value="After">시술 후</option>
+                            <option value="1W">시술 1주 후</option>
+                            <option value="1M">시술 1개월 후</option>
+                            <option value="3M">시술 3개월 후</option>
+                            <option value="6M">시술 6개월 후</option>
+                            <option value="1Y">시술 1년 후</option>
+                            <option value="None">기타/미지정</option>
+                        </select>
+                        
                         <select id="photoAngleFilter"
-                                class="p-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                            <option value="all">전체 각도</option>
+                                class="p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary"> <option value="all">전체 각도</option>
                             <option value="C0">C0</option>
                             <option value="L45">L45</option>
                             <option value="R45">R45</option>
                         </select>
                     </div>
                 </div>
-                <ul id="photoList" class="p-2 grid grid-cols-2 gap-2">
-                    <!-- 환자의 사진 목록이 여기에 동적으로 로드됩니다. -->
-                    <p class="col-span-2 text-center text-gray-500 py-4">사진 목록을 불러오는 중...</p>
-                </ul>
+                <ul id="photoList" class="p-1 grid grid-cols-2 gap-1"> <p class="col-span-2 text-center text-gray-500 py-2 text-xs">사진 목록을 불러오는 중...</p> </ul>
             </div>
 
-            <!-- 사진 불러오기 버튼 -->
             <div class="mt-4 flex flex-col space-y-2">
-                <button id="uploadLocalImageBtn"
+                <button id="importPhotoBtn"
                         class="w-full py-2 bg-primary text-white rounded-md hover:bg-green-600 transition-colors duration-200 shadow-md">
-                    PC에서 사진 불러오기
+                    사진 불러오기
                 </button>
                 <input type="file" id="localFileInput" accept="image/*" class="hidden">
-
-                <button id="uploadWebImageBtn"
-                        class="w-full py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 shadow-md">
-                    웹에서 사진 불러오기
-                </button>
-                <button id="deletePhotoBtn"
-                        class="w-full py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200 shadow-md">
-                    선택 사진 삭제
-                </button>
             </div>
         </aside>
 
-        <!-- 메인 뷰어 영역 -->
         <main id="mainViewer" class="flex-1 flex flex-col bg-gray-800 relative md:w-2/3 lg:w-3/4 overflow-hidden">
-            <!-- 뷰어 상단 정보바 -->
             <div class="bg-gray-900 text-white p-3 flex justify-between items-center shadow-md z-20">
                 <div>
                     <h2 id="viewerPatientName" class="text-lg font-semibold">사진 뷰어</h2>
@@ -177,39 +158,34 @@
                     <button id="fullScreenBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600 transition-colors duration-200 shadow">
                         전체 화면
                     </button>
+                    <button id="deletePhotoBtn"
+                            class="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 transition-colors duration-200 shadow">
+                        선택 사진 삭제
+                    </button>
                 </div>
             </div>
 
-            <!-- 이미지 뷰어 컨테이너 -->
             <div id="image-container" class="flex-1 flex justify-center items-center relative overflow-hidden">
-                <!-- 이미지 플레이스홀더 (초기 상태 또는 사진 없을 때) -->
                 <div id="viewerPlaceholder" class="absolute inset-0 flex flex-col justify-center items-center text-gray-500">
-                    <!-- 첨부된 이미지 -->
                     <img src="https://firebasestorage.googleapis.com/v0/b/frayviewer-63e13.firebasestorage.app/o/images%2FF-RAY_device%20pic_side.jpg?alt=media&token=a61a0421-082f-4165-9df9-9ca47f1a320c" alt="F-ray Device" class="max-w-xs h-auto mb-4">
                     <h3 class="mt-2 text-lg font-medium">사진 뷰어</h3>
                     <p class="mt-1 text-sm">좌측에서 환자를 검색하고 사진을 선택해주세요.</p>
                 </div>
 
-                <!-- 실제 이미지 뷰어 (사진 로드 시 표시) -->
                 <div id="imageViewer" class="absolute inset-0 flex justify-center items-center p-4 space-x-4 hidden">
-                    <!-- 메인 이미지 래퍼 -->
                     <div id="mainImageWrapper" class="image-wrapper relative flex-1 w-full h-full flex justify-center items-center overflow-hidden rounded-lg shadow-xl" draggable="true" data-photo-id="">
                         <img id="mainImage" src="" alt="Main Image" class="max-w-full max-h-full object-contain transition-transform duration-75 ease-out">
                     </div>
-                    <!-- 비교 이미지 래퍼 (2장 비교 시) -->
                     <div id="compareImageWrapper" class="image-wrapper relative flex-1 w-full h-full flex justify-center items-center overflow-hidden rounded-lg shadow-xl hidden" draggable="true" data-photo-id="">
                         <img id="compareImage" src="" alt="Compare Image" class="max-w-full max-h-full object-contain transition-transform duration-75 ease-out">
                     </div>
-                    <!-- 세 번째 이미지 래퍼 (3장 비교 시) -->
                     <div id="tertiaryImageWrapper" class="image-wrapper relative flex-1 w-full h-full flex justify-center items-center overflow-hidden rounded-lg shadow-xl hidden" draggable="true" data-photo-id="">
                         <img id="tertiaryImage" src="" alt="Tertiary Image" class="max-w-full max-h-full object-contain transition-transform duration-75 ease-out">
                     </div>
 
-                    <!-- AI 분석 캔버스 (항상 존재하지만 필요 시에만 그림) -->
                     <canvas id="analysisCanvas" class="absolute"></canvas>
                 </div>
 
-                <!-- 줌 컨트롤 -->
                 <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 bg-gray-900 bg-opacity-75 p-2 rounded-full shadow-lg z-20">
                     <button id="zoomInBtn" class="p-2 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -217,7 +193,6 @@
                     <button id="zoomOutBtn" class="p-2 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
                     </button>
-                    <!-- 되돌리기 버튼 아이콘 변경 -->
                     <button id="resetViewBtn" class="p-2 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356-2A8.001 8.001 0 004 12c0 2.972 1.154 5.727 3.039 7.732m0 0l-4.582 2.58m4.582-2.58h2.58m4.356-9.172v-2.58m0 0l-2.58-4.582m2.58 4.582h2.58"></path>
@@ -226,18 +201,15 @@
                 </div>
             </div>
 
-            <!-- AI 분석 패널 (초기에는 숨김) -->
             <div id="analysisPanel" class="absolute right-0 top-0 h-full w-1/3 bg-gray-900 bg-opacity-90 text-white p-4 shadow-xl z-30 hidden">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-700 pb-2">AI 분석 결과</h3>
                 <div id="analysisContent" class="text-gray-200 text-sm space-y-4">
-                    <!-- AI 분석 결과가 여기에 표시됩니다. -->
                     <p>AI 분석 결과를 보려면 사진을 선택하고 'AI 분석' 버튼을 클릭해주세요.</p>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- 웹에서 사진 불러오기 모달 -->
     <div id="webImageSelectOverlay" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 hidden">
         <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 md:w-2/3 lg:w-1/2 max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
@@ -245,13 +217,27 @@
                 <button id="closeWebImageSelectModal" class="text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
             </div>
             <div id="storageImageList" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 overflow-y-auto flex-1 p-2 border border-gray-200 rounded-md bg-gray-50">
-                <!-- Storage 이미지 목록이 여기에 동적으로 로드됩니다. -->
                 <p class="col-span-full text-center text-gray-500 py-4">Storage 이미지를 불러오는 중...</p>
             </div>
         </div>
     </div>
 
-    <!-- 사진 비교 선택 모달 -->
+    <div id="importChoiceOverlay" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl text-center">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">사진 불러오기</h3>
+            <p class="text-gray-600 mb-6">어디에서 사진을 불러오시겠습니까?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="importFromLocalBtn" class="px-6 py-3 bg-primary text-white rounded-md text-lg font-semibold hover:bg-green-600 transition-colors duration-200 shadow-md">
+                    PC에서 불러오기
+                </button>
+                <button id="importFromWebBtn" class="px-6 py-3 bg-accent text-white rounded-md text-lg font-semibold hover:bg-blue-600 transition-colors duration-200 shadow-md">
+                    웹에서 불러오기
+                </button>
+            </div>
+            <button id="closeImportChoiceModal" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
+        </div>
+    </div>
+
     <div id="compareChoiceOverlay" class="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 hidden">
         <div class="bg-white p-6 rounded-lg shadow-xl text-center">
             <h3 class="text-xl font-bold mb-4 text-gray-800">사진 비교 모드 선택</h3>
@@ -267,7 +253,6 @@
         </div>
     </div>
 
-    <!-- JavaScript 파일 연결 -->
     <script type="module" src="script.js"></script>
 </body>
 </html>

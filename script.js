@@ -96,7 +96,7 @@ function setupEventListeners() {
 
     // 촬영 날짜 필터 (새로 추가)
     document.getElementById('photoDateFilter').addEventListener('change', (e) => {
-        state.currentDateFilter = e.target.value; // YYYY-MM-DD 형식으로 저장
+        state.currentDateFilter = e.target.value; //InstrumentedTest-MM-DD 형식으로 저장
         fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
     });
 
@@ -107,7 +107,6 @@ function setupEventListeners() {
     });
 
     // [변경] 시술 상태 필터 (새로 추가)
-    // index.html에 #photoProcedureStatusFilter id를 가진 select 태그가 있다고 가정합니다.
     const photoProcedureStatusFilter = document.getElementById('photoProcedureStatusFilter');
     if (photoProcedureStatusFilter) {
         photoProcedureStatusFilter.addEventListener('change', (e) => {
@@ -124,7 +123,9 @@ function setupEventListeners() {
     document.getElementById('zoomInBtn').addEventListener('click', () => zoomImage(state.zoomStep)); // 확대 버튼
     document.getElementById('zoomOutBtn').addEventListener('click', () => zoomImage(-state.zoomStep)); // 축소 버튼
     document.getElementById('resetViewBtn').addEventListener('click', resetZoomAndPan); // 초기화 버튼
-    document.getElementById('deletePhotoBtn').addEventListener('click', () => { // 사진 삭제 버튼
+    
+    // [이동] 선택 사진 삭제 버튼
+    document.getElementById('deletePhotoBtn').addEventListener('click', () => { 
         if (state.primaryPhotoId) {
             deletePhoto(state.primaryPhotoId);
         } else {
@@ -141,32 +142,42 @@ function setupEventListeners() {
     imageContainer.addEventListener('wheel', handleMouseWheelZoom); // 마우스 휠로 확대/축소
     imageContainer.addEventListener('mousedown', handleMouseDown); // 마우스 클릭(누름) 시 드래그 시작
 
-    // 로컬 및 웹 파일 업로드 버튼에 이벤트 리스너 추가
-    document.getElementById('uploadLocalImageBtn').addEventListener('click', () => {
-        console.log("PC에서 불러오기 버튼 클릭됨. (uploadLocalImageBtn)"); // 디버깅 로그 추가
-        document.getElementById('localFileInput').click(); // 숨겨진 파일 입력창 클릭 이벤트를 강제로 발생시킵니다.
+    // [통합] 사진 불러오기 버튼 이벤트 리스너 추가
+    document.getElementById('importPhotoBtn').addEventListener('click', () => {
+        console.log("사진 불러오기 버튼 클릭됨. (importPhotoBtn)");
+        document.getElementById('importChoiceOverlay').classList.remove('hidden'); // 통합 선택 모달 표시
     });
+    // [추가] 통합 불러오기 모달 내 PC에서 불러오기 버튼
+    document.getElementById('importFromLocalBtn').addEventListener('click', () => {
+        document.getElementById('importChoiceOverlay').classList.add('hidden'); // 모달 닫기
+        document.getElementById('localFileInput').click(); // 숨겨진 파일 입력창 클릭 이벤트 발생
+    });
+    // [추가] 통합 불러오기 모달 내 웹에서 불러오기 버튼
+    document.getElementById('importFromWebBtn').addEventListener('click', () => {
+        document.getElementById('importChoiceOverlay').classList.add('hidden'); // 모달 닫기
+        showWebImageSelectModal(); // 웹 이미지 선택 모달 표시
+    });
+    // [추가] 통합 불러오기 모달 닫기 버튼
+    document.getElementById('closeImportChoiceModal').addEventListener('click', () => {
+        document.getElementById('importChoiceOverlay').classList.add('hidden'); // 모달 닫기
+    });
+
+    // 로컬 파일 입력창 이벤트는 기존과 동일하게 유지
     document.getElementById('localFileInput').addEventListener('change', (event) => {
-        console.log("localFileInput change 이벤트 발생."); // 디버깅 로그 추가
-        handleLocalFileSelect(event); // 파일 선택 시 실행될 함수 연결
+        console.log("localFileInput change 이벤트 발생.");
+        handleLocalFileSelect(event);
     });
     
-    // '웹에서 사진 불러오기' 버튼 이벤트 리스너 수정
-    document.getElementById('uploadWebImageBtn').addEventListener('click', () => {
-        console.log("웹에서 불러오기 버튼 클릭됨. (uploadWebImageBtn)"); // 디버깅 로그 추가
-        showWebImageSelectModal();
+    // 웹 이미지 선택 모달 닫기 버튼 이벤트 리스너는 기존과 동일하게 유지
+    document.getElementById('closeWebImageSelectModal').addEventListener('click', () => {
+        console.log("웹 이미지 선택 모달 닫기 버튼 클릭됨.");
+        document.getElementById('webImageSelectOverlay').classList.add('hidden');
     });
 
     // '새 환자 추가' 버튼 이벤트 리스너 추가
     document.getElementById('addPatientBtn').addEventListener('click', () => {
-        console.log("새 환자 추가 버튼 클릭됨. (addPatientBtn)"); // 디버깅 로그 추가
+        console.log("새 환자 추가 버튼 클릭됨. (addPatientBtn)");
         addNewPatient();
-    });
-
-    // 웹 이미지 선택 모달 닫기 버튼 이벤트 리스너 추가
-    document.getElementById('closeWebImageSelectModal').addEventListener('click', () => {
-        console.log("웹 이미지 선택 모달 닫기 버튼 클릭됨."); // 디버깅 로그 추가
-        document.getElementById('webImageSelectOverlay').classList.add('hidden');
     });
 
     // 드래그 앤 드롭 이벤트 리스너 추가 (모든 이미지 래퍼에 적용)
@@ -198,7 +209,8 @@ async function getPhotoById(photoId) {
 async function fetchPatients(searchTerm = '') {
     console.log('fetchPatients 호출됨. searchTerm:', searchTerm); // Debug log
     const patientListEl = document.getElementById('patientList');
-    patientListEl.innerHTML = '<p class="text-center text-gray-500 py-4">환자 목록을 불러오는 중...</p>'; // 로딩 메시지
+    // [변경] 로딩 메시지 폰트 사이즈 및 간격 조정
+    patientListEl.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm">환자 목록을 불러오는 중...</p>';
     try {
         const patientsCol = collection(db, 'patients'); // 'patients' 컬렉션 참조
         const patientSnapshot = await getDocs(patientsCol); // 모든 환자 문서 가져오기
@@ -218,12 +230,14 @@ async function fetchPatients(searchTerm = '') {
 
         renderPatientList(filteredPatients); // 필터링된 환자 목록을 화면에 그립니다.
         if (filteredPatients.length === 0) {
-            patientListEl.innerHTML = '<p class="text-center text-gray-500 py-4">환자가 없습니다. "새 환자 추가" 버튼으로 추가해보세요.</p>';
+            // [변경] 메시지 폰트 사이즈 및 간격 조정
+            patientListEl.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm">환자가 없습니다. "새 환자 추가" 버튼으로 추가해보세요.</p>';
         }
     }
     catch (error) {
         console.error("환자 목록을 불러오는 중 오류 발생:", error);
-        patientListEl.innerHTML = '<p class="text-center text-red-500 py-4">환자 목록을 불러오지 못했습니다.</p>';
+        // [변경] 에러 메시지 폰트 사이즈 및 간격 조정
+        patientListEl.innerHTML = '<p class="text-center text-red-500 py-2 text-sm">환자 목록을 불러오지 못했습니다.</p>';
     }
 }
 
@@ -237,15 +251,17 @@ function renderPatientList(patients) {
     patients.forEach(patient => {
         const li = document.createElement('li'); // 새로운 리스트 아이템(li)을 만듭니다.
         // Tailwind CSS 클래스를 적용하여 스타일을 입힙니다.
-        li.className = 'patient-list-item p-2 cursor-pointer border-b border-gray-200 flex justify-between items-center';
+        // [변경] p-2를 py-1로, text-sm 추가
+        li.className = 'patient-list-item py-1 px-2 cursor-pointer border-b border-gray-200 flex justify-between items-center text-sm';
         // 현재 선택된 환자라면 'selected' 클래스를 추가하여 강조합니다.
         if(patient.id === state.selectedPatientId) li.classList.add('selected');
 
         // 환자 정보를 li 안에 넣어줍니다.
+        // [변경] 폰트 사이즈 조정
         li.innerHTML = `
             <div>
-                <p class="font-semibold">${patient.name}</p>
-                <p class="text-sm text-gray-500">${patient.chartId} | ${patient.birth}</p>
+                <p class="font-semibold text-sm"><span class="math-inline">\{patient\.name\}</p\>
+<p class\="text\-xs text\-gray\-500"\></span>{patient.chartId} | ${patient.birth}</p>
             </div>
             <span class="text-xs text-gray-400">></span>
         `;
@@ -299,7 +315,7 @@ async function selectPatient(patientId) {
 
             // 로컬 파일의 경우 Storage에 업로드
             if (file) {
-                const storageRef = ref(storage, `photos/${patientId}/${file.name}_${Date.now()}`);
+                const storageRef = ref(storage, `photos/<span class="math-inline">\{patientId\}/</span>{file.name}_${Date.now()}`);
                 const snapshot = await uploadBytes(storageRef, file);
                 imageUrlToDisplay = await getDownloadURL(snapshot.ref);
                 console.log('Staged file uploaded to Firebase Storage:', imageUrlToDisplay);
@@ -365,9 +381,9 @@ async function selectPatient(patientId) {
         if (!state.stagedPhoto && state.primaryPhotoId) {
             const currentPhoto = await getPhotoById(state.primaryPhotoId);
             if (currentPhoto) {
-                 document.getElementById('viewerPatientName').innerText = `${selectedPatient.name} (${selectedPatient.chartId})`;
+                 document.getElementById('viewerPatientName').innerText = `<span class="math-inline">\{selectedPatient\.name\} \(</span>{selectedPatient.chartId})`;
                  // [변경] 뷰어 사진 정보에 procedureStatus 추가
-                 document.getElementById('viewerPhotoInfo').innerText = `${currentPhoto.date} | ${currentPhoto.mode} | ${currentPhoto.viewAngle} | ${currentPhoto.procedureStatus}`;
+                 document.getElementById('viewerPhotoInfo').innerText = `${currentPhoto.date} | ${currentPhoto.mode} | ${currentPhoto.viewAngle} | ${currentPhoto.procedureStatus || 'N/A'}`;
             }
         }
     } else {
@@ -389,7 +405,8 @@ async function fetchPhotos(patientId) {
         return;
     }
     const photoListEl = document.getElementById('photoList');
-    photoListEl.innerHTML = '<p class="text-center text-gray-500 py-4">사진 목록을 불러오는 중...</p>'; // 로딩 메시지
+    // [변경] 로딩 메시지 폰트 사이즈 및 간격 조정
+    photoListEl.innerHTML = '<p class="col-span-2 text-center text-gray-500 py-2 text-xs">사진 목록을 불러오는 중...</p>'; 
 
     try {
         const photosCol = collection(db, 'photos');
@@ -431,12 +448,14 @@ async function fetchPhotos(patientId) {
 
         renderPhotoList(photos); // 불러온 사진 목록을 화면에 그립니다.
         if (photos.length === 0) {
-            photoListEl.innerHTML = '<p class="text-center text-gray-500 py-4">이 환자의 사진이 없습니다. PC나 웹에서 사진을 불러와 추가해보세요.</p>';
+            // [변경] 메시지 폰트 사이즈 및 간격 조정
+            photoListEl.innerHTML = '<p class="col-span-2 text-center text-gray-500 py-2 text-xs">이 환자의 사진이 없습니다. PC나 웹에서 사진을 불러와 추가해보세요.</p>';
         }
 
     } catch (error) {
         console.error("사진 목록을 불러오는 중 오류 발생:", error);
-        photoListEl.innerHTML = '<p class="text-center text-red-500 py-4">사진 목록을 불러오지 못했습니다.</p>';
+        // [변경] 에러 메시지 폰트 사이즈 및 간격 조정
+        photoListEl.innerHTML = '<p class="col-span-2 text-center text-red-500 py-2 text-xs">사진 목록을 불러오지 못했습니다.</p>';
     }
 }
 
@@ -449,19 +468,35 @@ function renderPhotoList(photos) {
     photos.forEach(photo => {
         const li = document.createElement('li'); // 새로운 리스트 아이템(li)을 만듭니다.
         // Tailwind CSS 클래스를 적용하여 스타일을 입힙니다.
-        li.className = 'photo-list-item p-1 cursor-pointer rounded-md flex items-center space-x-2';
-        // 현재 선택된(비교 모드 포함) 사진이라면 'selected' 클래스를 추가합니다.
-        if(photo.id === state.primaryPhotoId || photo.id === state.secondaryPhotoId || photo.id === state.tertiaryPhotoId) li.classList.add('selected');
+        // [변경] p-1을 px-1 py-0.5로, text-xs 추가 (썸네일 간격 추가 조정)
+        li.className = 'photo-list-item px-1 py-0.5 cursor-pointer rounded-md flex items-center space-x-1 text-xs';
 
-        // 사진 썸네일과 정보를 li 안에 넣어줍니다.
-        // [변경] 사진 정보에 procedureStatus 추가
-        li.innerHTML = `
-            <img src="${photo.url}" alt="${photo.mode}" class="w-16 h-16 object-cover rounded-md mb-2">
-            <div>
-                <p class="font-medium text-sm">${photo.mode} (${photo.viewAngle})</p>
-                <p class="text-xs text-gray-500">${photo.date} | ${photo.procedureStatus || 'N/A'}</p> 
-            </div>
+        const img = document.createElement('img'); // 이미지 엘리먼트 생성
+        img.src = photo.url; // 이미지 URL 설정
+        img.alt = photo.mode;
+        // [변경] 썸네일 크기 조정 (w-16 h-16을 w-12 h-12로), mb-2를 mr-1로 변경
+        img.className = 'w-12 h-12 object-cover rounded-md mr-1';
+
+        // 썸네일 이미지 로딩 에러 및 완료 핸들러 추가
+        img.onload = () => {
+            // console.log(`Thumbnail loaded: ${photo.url}`); // 썸네일 로딩 성공 로그 (필요시 활성화)
+        };
+        img.onerror = () => {
+            console.error(`Error loading thumbnail image: ${photo.url}`);
+            // [변경] 썸네일 에러 이미지 크기 조정 (64x64)
+            img.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'64\' height=\'64\' viewBox=\'0 0 64 64\'%3E%3Crect width=\'64\' height=\'64\' fill=\'%23f8d7da\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' font-family=\'sans-serif\' font-size=\'8\' fill=\'%23721c24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EError%3C/text%3E%3C/svg%3E';
+        };
+
+        const divInfo = document.createElement('div');
+        // [변경] 폰트 사이즈 조정 (text-xxs는 HTML 스타일 태그에 추가 정의)
+        divInfo.innerHTML = `
+            <p class="font-medium text-xs"><span class="math-inline">\{photo\.mode\} \(</span>{photo.viewAngle})</p>
+            <p class="text-xxs text-gray-500">${photo.date} | ${photo.procedureStatus || 'N/A'}</p> 
         `;
+
+        li.appendChild(img); // 이미지 엘리먼트 추가
+        li.appendChild(divInfo); // 정보 div 엘리먼트 추가
+
         // li를 클릭하면 selectPhoto 함수가 호출되도록 이벤트를 연결합니다.
         li.addEventListener('click', () => {
             console.log('사진 목록 아이템 클릭됨. Photo ID:', photo.id); // 디버깅 로그 추가
@@ -621,8 +656,8 @@ function renderAnalysis(photo) {
                 const { wrinkles, pores, spots } = photo.ai_analysis;
                 html = `
                     <div class="space-y-3">
-                        <div><p class="font-semibold">주름</p><p class="text-blue-600">${wrinkles} 개</p></div>
-                        <div><p class="font-semibold">모공</p><p class="text-blue-600">${pores} %</p></div>
+                        <div><p class="font-semibold">주름</p><p class="text-blue-600"><span class="math-inline">\{wrinkles\} 개</p\></div\>
+<div\><p class\="font\-semibold"\>모공</p\><p class\="text\-blue\-600"\></span>{pores} %</p></div>
                         <div><p class="font-semibold">색소침착</p><p class="text-blue-600">${spots} 개</p></div>
                     </div>
                 `;
@@ -671,8 +706,8 @@ function renderAnalysis(photo) {
                 const { pigmentation, sebum } = photo.ai_analysis;
                 html = `
                     <div class="space-y-3">
-                        <div><p class="font-semibold">잠재 색소</p><p class="text-purple-600">${pigmentation} / 100</p></div>
-                        <div><p class="font-semibold">피지량</p><p class="text-orange-600">${sebum} / 100</p></div>
+                        <div><p class="font-semibold">잠재 색소</p><p class="text-purple-600"><span class="math-inline">\{pigmentation\} / 100</p\></div\>
+<div\><p class\="font\-semibold"\>피지량</p\><p class\="text\-orange\-600"\></span>{sebum} / 100</p></div>
                     </div>
                 `;
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.15)'; // 빨간색 (투명도 15%)
@@ -809,6 +844,12 @@ async function updateComparisonDisplay() {
         el.wrapper.classList.remove('flex-1', 'w-full');
         document.getElementById(el.id).src = '';
         el.wrapper.dataset.photoId = ''; // Data ID 초기화
+        // 기존 onload/onerror 핸들러가 있다면 제거 (새로 할당하기 전)
+        const imgEl = document.getElementById(el.id);
+        if (imgEl) {
+            imgEl.onload = null;
+            imgEl.onerror = null; 
+        }
     });
 
 
@@ -825,8 +866,26 @@ async function updateComparisonDisplay() {
                 wrapperEl.classList.add('flex-1');
                 // Store photoId on wrapper for drag/drop
                 wrapperEl.dataset.photoId = photo.id;
-                // [변경] 시술 상태 정보도 infoTexts에 포함
-                infoTexts.push(`${photo.date} (${photo.mode} ${photo.viewAngle} ${photo.procedureStatus || ''})`);
+                // 시술 상태 정보도 infoTexts에 포함
+                infoTexts.push(`<span class="math-inline">\{photo\.date\} \(</span>{photo.mode} ${photo.viewAngle} ${photo.procedureStatus || ''})`);
+
+                // 이미지 로딩 후 변환 적용을 위한 onload 핸들러 추가
+                imgEl.onload = () => {
+                    console.log(`Image loaded: ${photo.url}`);
+                    applyTransforms(); // 이 이미지에 대한 변환 재적용
+                    // 만약 분석 패널이 활성화되어 있고 현재 이미지가 primaryPhotoId라면 분석 결과도 다시 렌더링
+                    if (state.isAnalysisPanelVisible && photo.id === state.primaryPhotoId) {
+                        renderAnalysis(photo);
+                    }
+                };
+                // 이미지 로딩 에러 핸들링
+                imgEl.onerror = () => {
+                    console.error(`Error loading image from Firebase Storage: ${photo.url}`);
+                    // 대체 이미지로 변경 또는 사용자에게 시각적 피드백 제공
+                    imgEl.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'150\' viewBox=\'0 0 150 150\'%3E%3Crect width=\'150\' height=\'150\' fill=\'%23f8d7da\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' font-family=\'sans-serif\' font-size=\'14\' fill=\'%23721c24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EImage Error%3C/text%3E%3C/svg%3E'; // 로컬에서 생성하는 SVG 에러 이미지
+                };
+
+
                 if (!patientData) { // Fetch patient data only once from the first available photo
                     const patientDoc = await getDoc(doc(db, 'patients', photo.patientId));
                     patientData = patientDoc.exists() ? patientDoc.data() : null;
@@ -855,7 +914,7 @@ async function updateComparisonDisplay() {
     }
 
     if (patientData) {
-        viewerPatientName.innerText = `${patientData.name} (${patientData.chartId})`;
+        viewerPatientName.innerText = `<span class="math-inline">\{patientData\.name\} \(</span>{patientData.chartId})`;
     } else {
         viewerPatientName.innerText = '사진 뷰어';
     }
@@ -924,7 +983,7 @@ function applyTransforms() {
     // 각 이미지에 변환을 적용합니다.
     images.forEach(img => {
         if (!img.classList.contains('hidden')) {
-            img.style.transform = `translate(${state.currentTranslateX}px, ${state.currentTranslateY}px) scale(${state.currentZoomLevel})`;
+            img.style.transform = `translate(${state.currentTranslateX}px, <span class="math-inline">\{state\.currentTranslateY\}px\) scale\(</span>{state.currentZoomLevel})`;
         }
     });
     // 캔버스 변환은 메인 이미지의 변환과 일치해야 합니다.
@@ -1112,6 +1171,12 @@ async function handleDrop(e) {
     }
 }
 
+// handleDragEnd: 드래그가 끝날 때 (성공/실패 무관) 호출
+function handleDragEnd(e) {
+    console.log('Drag End Event:', e.target.closest('.image-wrapper')?.id);
+    e.target.closest('.image-wrapper')?.classList.remove('dragging-source'); // 소스 피드백 제거
+}
+
 // generateSampleAIAnalysis: 모드에 따라 샘플 AI 분석 데이터를 생성합니다.
 function generateSampleAIAnalysis(mode) {
     let analysis = {};
@@ -1169,8 +1234,8 @@ async function handleLocalFileSelect(event) {
         photoMode = parts[2]; // 세 번째 파트: 촬영모드
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
-        if (datePart.length === 8 && !isNaN(datePart)) { // YYYYMMDD 형식 확인
-            photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
+        if (datePart.length === 8 && !isNaN(datePart)) { //InstrumentedTestMMDD 형식 확인
+            photoDate = `<span class="math-inline">\{datePart\.slice\(0, 4\)\}\-</span>{datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
         if (parts.length >= 6) { // [변경] 여섯 번째 파트: 시술 상태
             procedureStatus = parts[5];
@@ -1224,10 +1289,23 @@ async function showWebImageSelectModal() {
 
             const imgDiv = document.createElement('div');
             imgDiv.className = 'relative flex flex-col items-center justify-center p-2 border rounded-md hover:shadow-lg transition-shadow';
-            imgDiv.innerHTML = `
-                <img src="${imageUrl}" alt="${fileName}" class="w-24 h-24 object-cover rounded-md mb-2">
-                <span class="text-xs text-gray-600 truncate w-full text-center">${fileName}</span>
-            `;
+            const imgEl = document.createElement('img');
+            imgEl.src = imageUrl;
+            imgEl.alt = fileName;
+            imgEl.className = 'w-24 h-24 object-cover rounded-md mb-2';
+
+            // 웹 이미지 미리보기 로딩 에러 핸들링
+            imgEl.onerror = () => {
+                console.error(`Error loading web image thumbnail: ${imageUrl}`);
+                imgEl.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'96\' height=\'96\' viewBox=\'0 0 96 96\'%3E%3Crect width=\'96\' height=\'96\' fill=\'%23f8d7da\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' font-family=\'sans-serif\' font-size=\'10\' fill=\'%23721c24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EError%3C/text%3E%3C/svg%3E';
+            };
+            
+            imgDiv.appendChild(imgEl);
+            const spanFileName = document.createElement('span');
+            spanFileName.className = 'text-xs text-gray-600 truncate w-full text-center';
+            spanFileName.innerText = fileName;
+            imgDiv.appendChild(spanFileName);
+
             // 이미지 클릭 시 해당 이미지를 선택하여 뷰어에 표시
             imgDiv.addEventListener('click', () => selectWebImageFromStorage(imageUrl, fileName));
             storageImageList.appendChild(imgDiv);
@@ -1258,7 +1336,7 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
         viewAngle = parts[3]; // 네 번째 파트: 각도
         const datePart = parts[4]; // 다섯 번째 파트: 촬영일자 (YYYYMMDD)
         if (datePart.length === 8 && !isNaN(datePart)) {
-            photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
+            photoDate = `<span class="math-inline">\{datePart\.slice\(0, 4\)\}\-</span>{datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
         }
         if (parts.length >= 6) { // [변경] 여섯 번째 파트: 시술 상태
             procedureStatus = parts[5];
@@ -1307,7 +1385,7 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
         if (sourceType === 'local') {
             const file = source;
             // 파일 이름을 고유하게 만들기 위해 타임스탬프 추가
-            const storageRef = ref(storage, `photos/${patientId}/${file.name}_${Date.now()}`);
+            const storageRef = ref(storage, `photos/<span class="math-inline">\{patientId\}/</span>{file.name}_${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             imageUrlToDisplay = await getDownloadURL(snapshot.ref);
             console.log('File uploaded to Firebase Storage:', imageUrlToDisplay);
@@ -1391,7 +1469,7 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
         document.getElementById('imageViewer').classList.remove('hidden');
         document.getElementById('imageViewer').classList.add('flex');
 
-        document.getElementById('mainImage').src = imageUrlToDisplay;
+        mainImage.src = imageUrlToDisplay;
         mainImageWrapper.classList.remove('hidden');
         mainImageWrapper.classList.add('w-full');
         compareImageWrapper.classList.add('hidden');
@@ -1404,7 +1482,19 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
         // [변경] 뷰어 사진 정보에 procedureStatus 추가
         viewerPhotoInfo.innerText = `${photoDate} | ${photoMode} | ${viewAngle} | ${procedureStatus}`;
 
-        resetZoomAndPan();
+        // [변경] stagedPhoto 이미지 로딩 후 변환 적용을 위한 onload 핸들러 추가
+        mainImage.onload = () => {
+            console.log(`Staged image loaded: ${imageUrlToDisplay}`);
+            resetZoomAndPan(); // staged image 로드 후 바로 줌/팬 초기화 및 변환 적용
+        };
+        // [변경] stagedPhoto 이미지 로딩 에러 핸들링
+        mainImage.onerror = () => {
+            console.error(`Error loading staged image: ${imageUrlToDisplay}`);
+            mainImage.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'150\' viewBox=\'0 0 150 150\'%3E%3Crect width=\'150\' height=\'150\' fill=\'%23f8d7da\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' font-family=\'sans-serif\' font-size=\'14\' fill=\'%23721c24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EStaged Image Error%3C/text%3E%3C/svg%3E';
+        };
+
+        // staged photo의 경우, 즉시 resetZoomAndPan을 호출하는 대신 onload에 의존합니다.
+        // resetZoomAndPan(); 
         state.isAnalysisPanelVisible = false;
         document.getElementById('analysisPanel').classList.add('hidden');
         document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white');
@@ -1479,7 +1569,7 @@ async function deletePhoto(photoId) {
         }
 
     } catch (error) {
-        console.error("사진 삭제 중 오류 발생:", error);
+         console.error("사진 삭제 중 오류 발생:", error); // 잘렸던 부분
         alert("사진 삭제에 실패했습니다: " + error.message);
     }
 }
