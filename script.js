@@ -199,7 +199,7 @@ async function getPhotoById(photoId) {
     console.log('getPhotoById 호출됨. photoId:', photoId); // 디버깅 로그 추가
     if (!photoId) return null;
     const photoDoc = await getDoc(doc(db, 'photos', photoId));
-    const photoData = photoDoc.exists() ? { id: photoDoc.id, ...doc.data() } : null;
+    const photoData = photoDoc.exists() ? { id: photoDoc.id, ...photoDoc.data() } : null;
     console.log('getPhotoById 결과:', photoData); // 디버깅 로그 추가
     return photoData;
 }
@@ -328,7 +328,7 @@ async function selectPatient(patientId) {
                 viewAngle: viewAngle,
                 date: date, // staged photo에서 가져온 date
                 uploadedAt: new Date(),
-                ai_analysis: aiAnalysisData, // staged photo에서 가져온 AI 분석 데이터
+                ai_analysis: ai_analysis, // staged photo에서 가져온 AI 분석 데이터
                 procedureStatus: procedureStatus // [변경] staged photo에서 가져온 시술 상태
             };
             const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
@@ -391,7 +391,7 @@ async function selectPatient(patientId) {
     }
     
     console.log('fetchPhotos 함수 호출 시작 (selectPatient).'); // 디버깅 로그 추가
-    fetchPhotos(patientId); // 필터링된 사진 목록을 다시 불러옵니다.
+    fetchPhotos(patientId); // 필터링된 사진 목록을 불러옵니다.
     console.log('selectPatient 함수 종료.'); // 디버깅 로그 추가
 }
 
@@ -523,6 +523,121 @@ async function selectPhoto(photoId) {
         analysisCanvas.classList.add('hidden'); // [추가] 캔버스를 숨깁니다.
         console.log('새 사진 선택으로 인해 AI 분석 패널 및 캔버스 초기화됨.');
     }
+
+    // updateComparisonDisplay: 현재 state.comparePhotoIds 배열을 기반으로 비교 뷰를 렌더링합니다.
+async function updateComparisonDisplay() {
+    console.log('updateComparisonDisplay 호출됨. 현재 comparePhotoIds:', state.comparePhotoIds);
+    const mainImageWrapper = document.getElementById('mainImageWrapper');
+    const compareImageWrapper = document.getElementById('compareImageWrapper');
+    const tertiaryImageWrapper = document.getElementById('tertiaryImageWrapper');
+    const imageContainer = document.getElementById('image-container');
+    const viewerPatientName = document.getElementById('viewerPatientName');
+    const viewerPhotoInfo = document.getElementById('viewerPhotoInfo');
+
+    document.getElementById('viewerPlaceholder').classList.add('hidden');
+    document.getElementById('imageViewer').classList.remove('hidden');
+    document.getElementById('imageViewer').classList.add('flex'); // Ensure imageViewer is visible
+
+    const photoElements = [
+        { id: 'mainImage', wrapper: mainImageWrapper },
+        { id: 'compareImage', wrapper: compareImageWrapper },
+        { id: 'tertiaryImage', wrapper: tertiaryImageWrapper }
+    ];
+
+    let infoTexts = [];
+    let patientData = null; // To store patient data once for the viewer header
+
+    // 이미지 래퍼들의 클래스 초기화
+    photoElements.forEach(el => {
+        el.wrapper.classList.add('hidden');
+        el.wrapper.classList.remove('flex-1', 'w-full');
+        document.getElementById(el.id).src = '';
+        el.wrapper.dataset.photoId = ''; // Data ID 초기화
+        // 기존 onload/onerror 핸들러가 있다면 제거 (새로 할당하기 전)
+        const imgEl = document.getElementById(el.id);
+        if (imgEl) {
+            imgEl.onload = null;
+            imgEl.onerror = null; 
+        }
+    });
+
+
+    for (let i = 0; i < state.comparePhotoIds.length; i++) {
+        const photoId = state.comparePhotoIds[i];
+        const imgEl = document.getElementById(photoElements[i].id);
+        const wrapperEl = photoElements[i].wrapper;
+        
+        if (photoId) {
+            const photo = await getPhotoById(photoId);
+            if (photo) {
+                imgEl.src = photo.url;
+                wrapperEl.classList.remove('hidden');
+                wrapperEl.classList.add('flex-1');
+                // Store photoId on wrapper for drag/drop
+                wrapperEl.dataset.photoId = photo.id;
+                // 시술 상태 정보도 infoTexts에 포함
+                infoTexts.push(`${photo.date} (${photo.mode} ${photo.viewAngle} ${photo.procedureStatus || ''})`);
+
+                // 이미지 로딩 후 변환 적용을 위한 onload 핸들러 추가
+                imgEl.onload = () => {
+                    console.log(`Image loaded: ${photo.url}`);
+                    applyTransforms(); // 이 이미지에 대한 변환 재적용
+                    // 만약 분석 패널이 활성화되어 있고 현재 이미지가 primaryPhotoId라면 분석 결과도 다시 렌더링
+                    if (state.isAnalysisPanelVisible && photo.id === state.primaryPhotoId) {
+                        renderAnalysis(photo);
+                    }
+                };
+                // 이미지 로딩 에러 핸들링
+                imgEl.onerror = () => {
+                    console.error(`Error loading image from Firebase Storage: ${photo.url}`);
+                    // 대체 이미지로 변경 또는 사용자에게 시각적 피드백 제공
+                    imgEl.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'150\' viewBox=\'0 0 150 150\'%3E%3Crect width=\'150\' height=\'150\' fill=\'%23f8d7da\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' font-family=\'sans-serif\' font-size=\'14\' fill=\'%23721c24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EImage Error%3C/text%3E%3C/svg%3E'; // 로컬에서 생성하는 SVG 에러 이미지
+                };
+
+
+                if (!patientData) { // Fetch patient data only once from the first available photo
+                    const patientDoc = await getDoc(doc(db, 'patients', photo.patientId));
+                    patientData = patientDoc.exists() ? patientDoc.data() : null;
+                }
+            }
+        }
+    }
+
+    // Adjust layout based on number of visible images
+    if (state.comparePhotoIds.filter(id => id !== null).length > 1) { // 실제로 2장 이상 비교 중일 때
+        imageContainer.classList.remove('flex-col');
+        imageContainer.classList.add('flex-row', 'gap-4', 'justify-center', 'items-center');
+    } else if (state.comparePhotoIds.filter(id => id !== null).length === 1) { // Only primary photo, single view
+        mainImageWrapper.classList.remove('hidden'); // Ensure main image is visible
+        mainImageWrapper.classList.remove('flex-1');
+        mainImageWrapper.classList.add('w-full');
+        // Other wrappers are already hidden by the loop initial cleanup
+        imageContainer.classList.remove('flex-row', 'gap-4');
+        imageContainer.classList.add('flex-col');
+    }
+    else {
+        // No photos selected, revert to placeholder
+        resetViewerToPlaceholder();
+        console.log('updateComparisonDisplay: 비교할 사진이 없어 플레이스홀더로 초기화.');
+        return; // Don't proceed with updating viewer info if no photos
+    }
+
+    if (patientData) {
+        viewerPatientName.innerText = `${patientData.name} (${patientData.chartId})`;
+    } else {
+        viewerPatientName.innerText = '사진 뷰어';
+    }
+    viewerPhotoInfo.innerText = infoTexts.join(' vs ');
+
+    resetZoomAndPan();
+    // In comparison mode, analysis panel is always hidden
+    state.isAnalysisPanelVisible = false;
+    document.getElementById('analysisPanel').classList.add('hidden');
+    document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white');
+    document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
+    clearAnalysis();
+    console.log('updateComparisonDisplay 종료. 현재 state.isComparingPhotos:', state.isComparingPhotos);
+}
 
 
     const photo = await getPhotoById(photoId);
