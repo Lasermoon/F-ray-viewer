@@ -391,7 +391,7 @@ async function selectPatient(patientId) {
     }
     
     console.log('fetchPhotos 함수 호출 시작 (selectPatient).'); // 디버깅 로그 추가
-    fetchPhotos(patientId); // 필터링된 사진 목록을 불러옵니다.
+    fetchPhotos(patientId); // 필터링된 사진 목록을 다시 불러옵니다.
     console.log('selectPatient 함수 종료.'); // 디버깅 로그 추가
 }
 
@@ -425,7 +425,6 @@ async function fetchPhotos(patientId) {
             q = query(q, where('viewAngle', '==', state.currentAngleFilter));
         }
         // [변경] 시술 상태 필터 적용
-        // 'all'이 아닐 경우에만 필터링 조건을 추가합니다.
         if (state.currentProcedureStatusFilter !== 'all') {
             q = query(q, where('procedureStatus', '==', state.currentProcedureStatusFilter));
         }
@@ -507,24 +506,336 @@ function renderPhotoList(photos) {
     });
 }
 
+// script.js (수정된 최종 버전)
+// ... (이전 코드는 동일)
+
 // selectPhoto: 사진을 선택했을 때 실행되는 함수입니다.
 async function selectPhoto(photoId) {
     console.log('selectPhoto 호출됨. photoId:', photoId); // 디버깅 로그 추가
     state.stagedPhoto = null; // Staged photo 초기화
 
     // [변경] AI 분석 패널이 열려있다면, 새 사진 선택 시 AI 분석을 초기화하고 패널을 닫습니다.
-    const analysisCanvas = document.getElementById('analysisCanvas'); // 캔버스 요소를 여기서 가져옴
     if (state.isAnalysisPanelVisible) {
         state.isAnalysisPanelVisible = false; // 상태 업데이트
         document.getElementById('analysisPanel').classList.add('hidden'); // 패널 숨김
         document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
         document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
         clearAnalysis(); // 캔버스 내용 지움
-        analysisCanvas.classList.add('hidden'); // [추가] 캔버스를 숨깁니다.
+        document.getElementById('analysisCanvas').classList.add('hidden'); // 캔버스 숨김
         console.log('새 사진 선택으로 인해 AI 분석 패널 및 캔버스 초기화됨.');
     }
 
-    // updateComparisonDisplay: 현재 state.comparePhotoIds 배열을 기반으로 비교 뷰를 렌더링합니다.
+
+    const photo = await getPhotoById(photoId);
+
+    if (!photo) {
+        alert("선택된 사진 정보를 찾을 수 없습니다.");
+        return;
+    }
+
+    if (state.isCompareSelectionActive) { // If in the process of selecting photos for comparison
+        console.log('비교 사진 선택 중. 현재 단계:', state.compareSelectionStep);
+        // Hide analysis panel if visible (이미 위에서 처리함)
+        // state.isAnalysisPanelVisible = false;
+        // document.getElementById('analysisPanel').classList.add('hidden');
+        // document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
+        // document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        // clearAnalysis();
+        // document.getElementById('analysisCanvas').classList.add('hidden'); // 캔버스 숨김
+
+        if (state.compareSelectionStep === 1) { // Selecting the second photo
+            if (photoId === state.comparePhotoIds[0]) {
+                alert('이미 첫 번째 사진으로 선택되었습니다. 다른 사진을 선택해주세요.');
+                return;
+            }
+            state.comparePhotoIds[1] = photoId; // Second photo
+            if (state.compareCount === 2) {
+                // Done with 2 photos, comparison ready
+                console.log('2장 비교 사진 선택 완료.');
+                state.isCompareSelectionActive = false; // Selection complete
+                state.isComparingPhotos = true; // Now actively comparing, drag/drop enabled
+                state.compareSelectionStep = 0; // Reset step
+                document.getElementById('compareBtn').innerText = '사진비교 해제'; // Change button to cancel
+            } else if (state.compareCount === 3) {
+                console.log('두 번째 사진 선택 완료. 세 번째 사진 선택 단계로 이동.');
+                state.compareSelectionStep = 2; // Move to third photo selection
+                document.getElementById('compareBtn').innerText = '비교할 세 번째 사진 선택...';
+                alert('비교할 세 번째 사진을 좌측 목록에서 선택해주세요.');
+            }
+        } else if (state.compareSelectionStep === 2) { // Selecting the third photo
+            if (photoId === state.comparePhotoIds[0] || photoId === state.comparePhotoIds[1]) {
+                alert('이미 선택된 사진입니다. 다른 사진을 선택해주세요.');
+                return;
+            }
+            state.comparePhotoIds[2] = photoId; // Third photo
+            // Done with 3 photos, comparison ready
+            console.log('3장 비교 사진 선택 완료.');
+            state.isCompareSelectionActive = false; // Selection complete
+            state.isComparingPhotos = true; // Now actively comparing, drag/drop enabled
+            state.compareSelectionStep = 0; // Reset step
+            document.getElementById('compareBtn').innerText = '사진비교 해제'; // Change button to cancel
+        }
+        console.log('비교 모드 진입 (updateComparisonDisplay 호출 전), comparePhotoIds:', state.comparePhotoIds);
+        await updateComparisonDisplay(); // Update display with new comparison set
+    } else {
+        // Single photo view (not in comparison selection or active comparison)
+        console.log('단일 사진 뷰 모드. photoId:', photoId);
+        state.primaryPhotoId = photoId;
+        state.secondaryPhotoId = null;
+        state.tertiaryPhotoId = null;
+        state.comparePhotoIds = [photoId]; // Set for single view
+        state.isCompareSelectionActive = false; // Ensure off
+        state.isComparingPhotos = false; // Ensure off
+        state.compareSelectionStep = 0;
+        state.compareCount = 0;
+        await updateComparisonDisplay(); // Update display for single photo
+        // Button text should revert to '사진 비교' if not in compare mode
+        document.getElementById('compareBtn').innerText = '사진 비교';
+        document.getElementById('compareBtn').classList.remove('bg-green-200');
+    }
+    fetchPhotos(state.selectedPatientId); // Refresh photo list to show selected items
+    console.log('selectPhoto 함수 종료. 현재 state.isComparingPhotos:', state.isComparingPhotos);
+}
+
+// toggleAnalysisPanel: AI 분석 패널을 보이거나 숨깁니다.
+function toggleAnalysisPanel() {
+    state.isAnalysisPanelVisible = !state.isAnalysisPanelVisible; // 상태를 토글합니다.
+    const panel = document.getElementById('analysisPanel');
+    const btn = document.getElementById('analyzeBtn');
+    const analysisCanvas = document.getElementById('analysisCanvas'); // 캔버스 요소 가져오기
+
+    console.log('AI 분석 버튼 클릭됨. 현재 isAnalysisPanelVisible:', state.isAnalysisPanelVisible);
+    console.log('현재 primaryPhotoId:', state.primaryPhotoId);
+
+    if (state.isAnalysisPanelVisible) { // 패널을 보이게 할 때
+        panel.classList.remove('hidden'); // 패널을 보입니다.
+        btn.classList.add('bg-[#4CAF50]', 'text-white'); // 버튼 색상을 변경하여 활성화 상태를 표시합니다.
+        analysisCanvas.classList.remove('hidden'); // 캔버스를 보이게 합니다.
+        
+        if (state.primaryPhotoId) {
+            getDoc(doc(db, 'photos', state.primaryPhotoId))
+                .then(snapshot => {
+                    if (snapshot.exists()) {
+                        const photoData = { id: snapshot.id, ...snapshot.data() };
+                        console.log('Firestore에서 불러온 사진 데이터:', photoData);
+                        if (photoData.ai_analysis && Object.keys(photoData.ai_analysis).length > 0) {
+                            renderAnalysis(photoData);
+                        } else {
+                            clearAnalysis();
+                            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>이 사진에 대한 AI 분석 정보가 없습니다. 새로 사진을 업로드하거나 다른 사진을 선택해보세요.</p>";
+                            console.log('AI 분석 데이터가 없거나 비어있습니다.');
+                        }
+                    } else {
+                        clearAnalysis();
+                        document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>선택된 사진 정보를 찾을 수 없습니다.</p>";
+                        console.log('선택된 사진 문서가 Firestore에 존재하지 않습니다.');
+                    }
+                })
+                .catch(error => {
+                    console.error("분석 정보 로딩 중 오류:", error);
+                    clearAnalysis();
+                    document.getElementById('analysisContent').innerHTML = "<p class='text-red-500'>분석 정보를 불러오지 못했습니다. 오류: " + error.message + "</p>";
+                });
+        } else {
+            clearAnalysis();
+            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>AI 분석 결과를 보려면 먼저 사진을 선택해주세요.</p>";
+            console.log('primaryPhotoId가 설정되지 않았습니다.');
+        }
+    } else { // 패널을 숨길 때
+        panel.classList.add('hidden'); // 패널을 숨깁니다.
+        btn.classList.remove('bg-[#4CAF50]', 'text-white'); 
+        btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        clearAnalysis(); // 분석 내용을 지웁니다.
+        analysisCanvas.classList.add('hidden'); // [변경] 캔버스를 숨깁니다.
+        console.log('AI 분석 패널이 숨겨졌습니다.');
+    }
+}
+
+// ... (나머지 코드는 동일)
+
+// renderAnalysis: 선택된 사진의 AI 분석 결과를 캔버스에 그리고 패널에 표시합니다.
+// 이제 Firestore에서 가져온 photo 객체의 ai_analysis 데이터를 사용합니다.
+function renderAnalysis(photo) {
+    console.log('renderAnalysis 호출됨. photo:', photo);
+    const contentEl = document.getElementById('analysisContent');
+    const canvas = document.getElementById('analysisCanvas');
+    const ctx = canvas.getContext('2d');
+    const img = document.getElementById('mainImage');
+    
+    // 이미지가 로드된 후 캔버스 크기 및 그리기
+    const render = () => {
+        canvas.width = img.naturalWidth; // 캔버스 내부 해상도를 이미지 원본 해상도에 맞춤
+        canvas.height = img.naturalHeight;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 기존 그림을 지웁니다.
+        let html = '';
+
+        if (photo && photo.ai_analysis && photo.ai_analysis.type) { // photo와 ai_analysis 데이터가 있을 때만 렌더링
+            console.log('AI 분석 데이터 유형:', photo.ai_analysis.type);
+            if (photo.ai_analysis.type === 'portrait') {
+                const { wrinkles, pores, spots } = photo.ai_analysis;
+                html = `
+                    <div class="space-y-3">
+                        <div><p class="font-semibold">주름</p><p class="text-blue-600">${wrinkles} 개</p></div>
+                        <div><p class="font-semibold">모공</p><p class="text-blue-600">${pores} %</p></div>
+                        <div><p class="font-semibold">색소침착</p><p class="text-blue-600">${spots} 개</p></div>
+                    </div>
+                `;
+                ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)'; // 노란색
+                ctx.lineWidth = Math.max(2, canvas.width / 400); // 캔버스 크기에 비례하여 선 굵기 조정
+                for(let i=0; i < wrinkles; i++){ // 가상의 주름 표시
+                     ctx.beginPath();
+                     const x = Math.random() * canvas.width * 0.6 + canvas.width * 0.2;
+                     const y = Math.random() * canvas.height * 0.7 + canvas.height * 0.15;
+                     ctx.arc(x, y, canvas.width / 80, 0, 2 * Math.PI); // 크기 조정
+                     ctx.stroke();
+                }
+            } else if (photo.ai_analysis.type === 'fray') {
+                const { sagging, lifting_sim } = photo.ai_analysis;
+                html = `
+                    <div class="space-y-3">
+                        <div><p class="font-semibold">피부 처짐 지수</p><p class="text-red-600">${sagging} / 100</p></div>
+                        <p class="text-sm text-gray-600 mt-4">AI가 예측한 리프팅 시술 후 개선 효과 시뮬레이션입니다.</p>
+                    </div>
+                `;
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)'; // 하늘색
+                ctx.lineWidth = Math.max(3, canvas.width / 300); // 캔버스 크기에 비례하여 선 굵기 조정
+                ctx.setLineDash([5, 5]); // 점선
+                if (lifting_sim) { // lifting_sim 데이터가 있을 경우에만 그립니다.
+                    lifting_sim.forEach(line => {
+                        ctx.beginPath();
+                        // 좌표는 0-1000 기준이라고 가정하고 캔버스 크기에 맞춰 스케일링
+                        const scaleX = canvas.width / 800; // 샘플 데이터가 800x1200 기준으로 생성된 경우
+                        const scaleY = canvas.height / 1200; // 샘플 데이터가 800x1200 기준으로 생성된 경우
+
+                        ctx.moveTo(line.x1 * scaleX, line.y1 * scaleY);
+                        ctx.lineTo(line.x2 * scaleX, line.y2 * scaleY);
+                        ctx.stroke();
+                        
+                        // 화살표 그리기
+                        ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
+                        ctx.beginPath();
+                        ctx.moveTo(line.x2*scaleX - 5, line.y2*scaleY);
+                        ctx.lineTo(line.x2*scaleX + 5, line.y2*scaleY);
+                        ctx.lineTo(line.x2*scaleX, line.y2*scaleY - 8); 
+                        ctx.closePath();
+                        ctx.fill();
+                    });
+                }
+            } else if (photo.ai_analysis.type === 'uv') {
+                const { pigmentation, sebum } = photo.ai_analysis;
+                html = `
+                    <div class="space-y-3">
+                        <div><p class="font-semibold">잠재 색소</p><p class="text-purple-600">${pigmentation} / 100</p></div>
+                        <div><p class="font-semibold">피지량</p><p class="text-orange-600">${sebum} / 100</p></div>
+                    </div>
+                `;
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.15)'; // 빨간색 (투명도 15%)
+                for(let i=0; i < pigmentation/2; i++){ // 가상의 색소침착 표시
+                     const x = Math.random() * canvas.width;
+                     const y = Math.random() * canvas.height;
+                     ctx.fillRect(x,y, canvas.width / 40, canvas.height / 60); // 크기 조정
+                }
+            }
+        } else {
+            html = "<p class='text-gray-500'>이 사진에 대한 AI 분석 정보가 없습니다.</p>";
+            console.log('AI 분석 데이터 유형이 정의되지 않았거나 photo 객체가 유효하지 않습니다.');
+        }
+        contentEl.innerHTML = html; // 분석 결과를 패널에 표시합니다.
+    }
+    
+    // 이미지가 로드된 후에 캔버스 크기를 설정하고 그리기
+    if (img.complete) {
+        render();
+    } else {
+        img.onload = render;
+    }
+    window.onresize = render; // 창 크기 변경 시에도 다시 렌더링
+}
+
+// clearAnalysis: 분석 패널의 내용을 지우고 캔버스를 초기화합니다.
+function clearAnalysis() {
+    const canvas = document.getElementById('analysisCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // 캔버스 내용을 지웁니다.
+    document.getElementById('analysisContent').innerHTML = ''; // 분석 패널 내용을 비웁니다.
+}
+
+// handleCompareButtonClick: '사진 비교' 버튼 클릭 시 실행됩니다.
+function handleCompareButtonClick() {
+    console.log('handleCompareButtonClick 호출됨. 현재 isComparingPhotos:', state.isComparingPhotos, 'isCompareSelectionActive:', state.isCompareSelectionActive);
+    // Check if there's at least one photo selected to start comparison
+    if (!state.primaryPhotoId) { // primaryPhotoId가 null이면 선택된 사진 없음
+        alert('먼저 비교할 첫 번째 사진을 불러오거나 선택해주세요.');
+        return;
+    }
+
+    if (state.isComparingPhotos || state.isCompareSelectionActive) { // If currently in comparison display mode OR selection mode, clicking button cancels it
+        console.log('비교 모드 또는 선택 모드 활성 중. 비교 모드 해제 시작.');
+        state.isComparingPhotos = false;
+        state.isCompareSelectionActive = false;
+        state.compareSelectionStep = 0;
+        state.compareCount = 0;
+        document.getElementById('compareBtn').innerText = '사진 비교';
+        document.getElementById('compareBtn').classList.remove('bg-green-200');
+        
+        // Revert to single primary photo view if it exists, otherwise to placeholder
+        if (state.primaryPhotoId) {
+            state.comparePhotoIds = [state.primaryPhotoId];
+            updateComparisonDisplay(); // This will render single photo
+        } else {
+            resetViewerToPlaceholder(); // This will clear everything
+        }
+        
+        // If analysis panel was visible, re-render analysis for the primary photo (if still selected)
+        if (state.isAnalysisPanelVisible && state.primaryPhotoId) {
+            getPhotoById(state.primaryPhotoId).then(photo => {
+                if (photo) renderAnalysis(photo);
+            });
+        }
+    } else { // Not in comparison display mode, so initiate selection
+        console.log('비교 모드 비활성. 비교 선택 시작.');
+        // Hide analysis panel if visible
+        state.isAnalysisPanelVisible = false;
+        document.getElementById('analysisPanel').classList.add('hidden');
+        document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
+        document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        clearAnalysis();
+
+        // Show compare choice overlay
+        document.getElementById('compareChoiceOverlay').classList.remove('hidden');
+    }
+}
+
+// startCompareSelection: 비교할 사진 개수(2장 또는 3장)를 선택했을 때 실행됩니다.
+function startCompareSelection(count) {
+    console.log('startCompareSelection 호출됨. count:', count);
+    document.getElementById('compareChoiceOverlay').classList.add('hidden'); // 선택 팝업을 숨깁니다.
+    state.isCompareSelectionActive = true; // Set selection active
+    state.isComparingPhotos = false; // Ensure comparison display is off during selection
+    state.compareCount = count; // 비교할 사진 개수를 저장합니다.
+    state.compareSelectionStep = 1; // 두 번째 사진 선택 단계로 설정합니다.
+
+    // Initialize comparePhotoIds with the primary photo if it exists
+    state.comparePhotoIds = state.primaryPhotoId ? [state.primaryPhotoId, null, null].slice(0, count) : [null, null, null].slice(0, count);
+    
+    document.getElementById('compareBtn').innerText = '비교할 두 번째 사진 선택...'; // 버튼 텍스트를 변경합니다.
+    document.getElementById('compareBtn').classList.add('bg-green-200'); // 버튼 색상을 변경하여 활성화 표시
+    alert('비교할 두 번째 사진을 좌측 목록에서 선택하거나 PC/웹에서 불러와 선택해주세요.'); // 사용자에게 안내
+
+    // Hide analysis panel
+    state.isAnalysisPanelVisible = false;
+    document.getElementById('analysisPanel').classList.add('hidden');
+    document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white'); 
+    document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+    clearAnalysis();
+
+    resetZoomAndPan(); // 확대/이동 상태 초기화
+    updateComparisonDisplay(); // Initial display for compare selection
+    console.log('startCompareSelection 종료. state.isCompareSelectionActive:', state.isCompareSelectionActive, 'state.isComparingPhotos:', state.isComparingPhotos);
+}
+
+// updateComparisonDisplay: 현재 state.comparePhotoIds 배열을 기반으로 비교 뷰를 렌더링합니다.
 async function updateComparisonDisplay() {
     console.log('updateComparisonDisplay 호출됨. 현재 comparePhotoIds:', state.comparePhotoIds);
     const mainImageWrapper = document.getElementById('mainImageWrapper');
@@ -639,123 +950,49 @@ async function updateComparisonDisplay() {
     console.log('updateComparisonDisplay 종료. 현재 state.isComparingPhotos:', state.isComparingPhotos);
 }
 
-
-    const photo = await getPhotoById(photoId);
-
-    if (!photo) {
-        alert("선택된 사진 정보를 찾을 수 없습니다.");
-        return;
-    }
-
-    if (state.isCompareSelectionActive) { // If in the process of selecting photos for comparison
-        console.log('비교 사진 선택 중. 현재 단계:', state.compareSelectionStep);
-        // Hide analysis panel if visible (이미 위에서 처리함)
-
-        if (state.compareSelectionStep === 1) { // Selecting the second photo
-            if (photoId === state.comparePhotoIds[0]) {
-                alert('이미 첫 번째 사진으로 선택되었습니다. 다른 사진을 선택해주세요.');
-                return;
-            }
-            state.comparePhotoIds[1] = photoId; // Second photo
-            if (state.compareCount === 2) {
-                // Done with 2 photos, comparison ready
-                console.log('2장 비교 사진 선택 완료.');
-                state.isCompareSelectionActive = false; // Selection complete
-                state.isComparingPhotos = true; // Now actively comparing, drag/drop enabled
-                state.compareSelectionStep = 0; // Reset step
-                document.getElementById('compareBtn').innerText = '사진비교 해제'; // Change button to cancel
-            } else if (state.compareCount === 3) {
-                console.log('두 번째 사진 선택 완료. 세 번째 사진 선택 단계로 이동.');
-                document.getElementById('compareBtn').innerText = '비교할 세 번째 사진 선택...';
-                alert('비교할 세 번째 사진을 좌측 목록에서 선택해주세요.');
-            }
-        } else if (state.compareSelectionStep === 2) { // Selecting the third photo
-            if (photoId === state.comparePhotoIds[0] || photoId === state.comparePhotoIds[1]) {
-                alert('이미 선택된 사진입니다. 다른 사진을 선택해주세요.');
-                return;
-            }
-            state.comparePhotoIds[2] = photoId; // Third photo
-            // Done with 3 photos, comparison ready
-            console.log('3장 비교 사진 선택 완료.');
-            state.isCompareSelectionActive = false; // Selection complete
-            state.isComparingPhotos = true; // Now actively comparing, drag/drop enabled
-            state.compareSelectionStep = 0; // Reset step
-            document.getElementById('compareBtn').innerText = '사진비교 해제'; // Change button to cancel
-        }
-        console.log('비교 모드 진입 (updateComparisonDisplay 호출 전), comparePhotoIds:', state.comparePhotoIds);
-        await updateComparisonDisplay(); // Update display with new comparison set
+// resetComparisonView function will be simplified, as updateComparisonDisplay handles most of it.
+async function resetComparisonView() {
+    console.log('resetComparisonView 호출됨.');
+    state.secondaryPhotoId = null;
+    state.tertiaryPhotoId = null;
+    state.compareCount = 0;
+    // If there's a primary photo, revert to single view, otherwise to placeholder
+    if (state.primaryPhotoId) {
+        state.comparePhotoIds = [state.primaryPhotoId];
     } else {
-        // Single photo view (not in comparison selection or active comparison)
-        console.log('단일 사진 뷰 모드. photoId:', photoId);
-        state.primaryPhotoId = photoId;
-        state.secondaryPhotoId = null;
-        state.tertiaryPhotoId = null;
-        state.comparePhotoIds = [photoId]; // Set for single view
-        state.isCompareSelectionActive = false; // Ensure off
-        state.isComparingPhotos = false; // Ensure off
-        state.compareSelectionStep = 0;
-        state.compareCount = 0;
-        await updateComparisonDisplay(); // Update display for single photo
-        // Button text should revert to '사진 비교' if not in compare mode
-        document.getElementById('compareBtn').innerText = '사진 비교';
-        document.getElementById('compareBtn').classList.remove('bg-green-200');
+        state.comparePhotoIds = [];
     }
-    fetchPhotos(state.selectedPatientId); // Refresh photo list to show selected items
-    console.log('selectPhoto 함수 종료. 현재 state.isComparingPhotos:', state.isComparingPhotos);
+    state.isComparingPhotos = false; // 비교 모드 해제
+    state.isCompareSelectionActive = false; // 선택 모드 해제
+    await updateComparisonDisplay();
 }
 
-// toggleAnalysisPanel: AI 분석 패널을 보이거나 숨깁니다.
-function toggleAnalysisPanel() {
-    state.isAnalysisPanelVisible = !state.isAnalysisPanelVisible; // 상태를 토글합니다.
-    const panel = document.getElementById('analysisPanel');
-    const btn = document.getElementById('analyzeBtn');
-    const analysisCanvas = document.getElementById('analysisCanvas'); // 캔버스 요소 가져오기
+// toggleFullScreen: 전체 화면 모드를 토글합니다. (실제 전체 화면은 아님)
+function toggleFullScreen() {
+    const sidebar = document.getElementById('sidebar');
+    const mainViewer = document.getElementById('mainViewer');
+    const fullScreenBtn = document.getElementById('fullScreenBtn');
 
-    console.log('AI 분석 버튼 클릭됨. 현재 isAnalysisPanelVisible:', state.isAnalysisPanelVisible);
-    console.log('현재 primaryPhotoId:', state.primaryPhotoId);
+    const isSimulatedFullScreen = mainViewer.classList.contains('full-screen-viewer');
 
-    if (state.isAnalysisPanelVisible) { // 패널을 보이게 할 때
-        panel.classList.remove('hidden'); // 패널을 보입니다.
-        btn.classList.add('bg-[#4CAF50]', 'text-white'); // 버튼 색상을 변경하여 활성화 상태를 표시합니다.
-        analysisCanvas.classList.remove('hidden'); // 캔버스를 보이게 합니다.
-        
-        if (state.primaryPhotoId) {
-            getDoc(doc(db, 'photos', state.primaryPhotoId))
-                .then(snapshot => {
-                    if (snapshot.exists()) {
-                        const photoData = { id: snapshot.id, ...snapshot.data() };
-                        console.log('Firestore에서 불러온 사진 데이터:', photoData);
-                        if (photoData.ai_analysis && Object.keys(photoData.ai_analysis).length > 0) {
-                            renderAnalysis(photoData);
-                        } else {
-                            clearAnalysis();
-                            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>이 사진에 대한 AI 분석 정보가 없습니다. 새로 사진을 업로드하거나 다른 사진을 선택해보세요.</p>";
-                            console.log('AI 분석 데이터가 없거나 비어있습니다.');
-                        }
-                    } else {
-                        clearAnalysis();
-                        document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>선택된 사진 정보를 찾을 수 없습니다.</p>";
-                        console.log('선택된 사진 문서가 Firestore에 존재하지 않습니다.');
-                    }
-                })
-                .catch(error => {
-                    console.error("분석 정보 로딩 중 오류:", error);
-                    clearAnalysis();
-                    document.getElementById('analysisContent').innerHTML = "<p class='text-red-500'>분석 정보를 불러오지 못했습니다. 오류: " + error.message + "</p>";
-                });
-        } else {
-            clearAnalysis();
-            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>AI 분석 결과를 보려면 먼저 사진을 선택해주세요.</p>";
-            console.log('primaryPhotoId가 설정되지 않았습니다.');
-        }
-    } else { // 패널을 숨길 때
-        panel.classList.add('hidden'); // 패널을 숨깁니다.
-        btn.classList.remove('bg-[#4CAF50]', 'text-white'); 
-        btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
-        clearAnalysis(); // 분석 내용을 지웁니다.
-        analysisCanvas.classList.add('hidden'); // [변경] 캔버스를 숨깁니다.
-        console.log('AI 분석 패널이 숨겨졌습니다.');
+    if (isSimulatedFullScreen) { // 현재 시뮬레이션 전체 화면이라면 일반 모드로
+        sidebar.classList.remove('hidden'); 
+        mainViewer.classList.remove('full-screen-viewer', 'w-full'); 
+        mainViewer.classList.add('md:w-2/3', 'lg:w-3/4'); 
+        fullScreenBtn.innerText = '전체 화면'; 
+    } else { // 현재 일반 모드라면 시뮬레이션 전체 화면으로
+        sidebar.classList.add('hidden'); 
+        mainViewer.classList.add('full-screen-viewer', 'w-full'); 
+        mainViewer.classList.remove('md:w-2/3', 'lg:w-3/4'); 
+        fullScreenBtn.innerText = '전체 화면 종료'; 
     }
+    // 분석 캔버스가 보인다면 새 크기에 맞춰 다시 렌더링합니다.
+    if (state.isAnalysisPanelVisible && state.primaryPhotoId) {
+        getPhotoById(state.primaryPhotoId).then(photo => {
+            if (photo) renderAnalysis(photo);
+        });
+    }
+    resetZoomAndPan(); 
 }
 
 // applyTransforms: 이미지와 캔버스에 확대/이동 변환을 적용합니다.
@@ -980,6 +1217,12 @@ function generateSampleAIAnalysis(mode) {
             pores: Math.floor(Math.random() * 30) + 10,   // 10-39 사이 (퍼센트)
             spots: Math.floor(Math.random() * 15) + 3    // 3-17 사이
         };
+    } else if (mode.includes('UV')) { // UV 포함하는 경우
+        analysis = {
+            type: 'uv',
+            pigmentation: Math.floor(Math.random() * 100), // 0-99 사이
+            sebum: Math.floor(Math.random() * 100)      // 0-99 사이
+        };
     } else {
         analysis = {
             type: 'general',
@@ -994,7 +1237,7 @@ async function handleLocalFileSelect(event) {
     console.log("handleLocalFileSelect 함수 실행됨."); // 디버깅 로그 추가
     const file = event.target.files[0]; 
     if (!file) { console.log("선택된 파일 없음."); return; }
-    console.log(" 선택된 파일:", file.name);
+    console.log("선택된 파일:", file.name);
 
     // 파일 이름과 확장자를 가져옵니다.
     const fileName = file.name;
