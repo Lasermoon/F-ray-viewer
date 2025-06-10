@@ -94,27 +94,40 @@
         <aside id="sidebar" class="w-1/3 md:w-1/3 lg:w-1/4 bg-white p-4 flex flex-col shadow-lg overflow-y-auto">
             <h1 class="text-2xl font-bold mb-4 text-gray-800">F-ray Viewer</h1>
             
-            <div class="mb-2 flex space-x-2"> <input type="text" id="patientSearch" placeholder="환자 이름 또는 차트 ID 검색"
-                       class="flex-1 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"> <button id="addPatientBtn"
-                        class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 shadow-md text-sm"> + 환자
+            <div class="mb-2 flex space-x-2">
+                <input type="text" id="patientSearch" placeholder="환자 이름 또는 차트 ID 검색"
+                       class="flex-1 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm">
+                <button id="addPatientBtn"
+                        class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 shadow-md text-sm">
+                    + 환자
                 </button>
             </div>
 
-            <div class="flex-1 overflow-y-auto border border-gray-200 rounded-md mb-2 bg-gray-50"> <ul id="patientList" class="divide-y divide-gray-200">
-                    <p class="text-center text-gray-500 py-2 text-sm">환자 목록을 불러오는 중...</p> </ul>
+            <div class="flex-1 overflow-y-auto border border-gray-200 rounded-md mb-2 bg-gray-50">
+                <ul id="patientList" class="divide-y divide-gray-200">
+                    <p class="text-center text-gray-500 py-2 text-sm">환자 목록을 불러오는 중...</p>
+                </ul>
             </div>
 
             <div id="photoListSection" class="flex-1 overflow-y-auto border border-gray-200 rounded-md bg-gray-50 hidden">
-                <h2 id="photoListHeader" class="text-base font-semibold p-2 bg-gray-100 border-b border-gray-200 sticky top-0 z-10 text-gray-700"> 선택된 환자의 사진 목록
+                <h2 id="photoListHeader" class="text-base font-semibold p-2 bg-gray-100 border-b border-gray-200 sticky top-0 z-10 text-gray-700">
+                    선택된 환자의 사진 목록
                 </h2>
-                <div class="p-2 bg-white border-b border-gray-200 sticky top-9 z-10 flex flex-col space-y-1"> <div class="flex justify-around text-sm font-medium text-center">
-                        <button class="photo-mode-filter-btn flex-1 p-1 rounded-l-md bg-[#4CAF50] text-white hover:bg-opacity-90 transition-colors duration-200 text-xs" data-filter="all">전체</button> <button class="photo-mode-filter-btn flex-1 p-1 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="F-ray">F-ray</button> <button class="photo-mode-filter-btn flex-1 p-1 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="Portrait">Portrait</button> <button class="photo-mode-filter-btn flex-1 p-1 rounded-r-md bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="UV">UV</button> </div>
-                    <div class="flex space-x-1 mt-1"> <input type="date" id="photoDateFilter"
-                               class="flex-1 p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary"> <select id="photoProcedureStatusFilter"
-                                class="p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary"> <option value="all">모든 시술시기</option>
-                            <option value="Before">시술 전</option>
-                            <option value="After">시술 후</option>
-                            <option value="1W">시술 1주 후</option>
+                <div class="p-2 bg-white border-b border-gray-200 sticky top-9 z-10 flex flex-col space-y-1">
+                    <div class="flex justify-around text-sm font-medium text-center">
+                        <button class="photo-mode-filter-btn flex-1 p-1 rounded-l-md bg-[#4CAF50] text-white hover:bg-opacity-90 transition-colors duration-200 text-xs" data-filter="all">전체</button>
+                        <button class="photo-mode-filter-btn flex-1 p-1 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="F-ray">F-ray</button>
+                        <button class="photo-mode-filter-btn flex-1 p-1 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="Portrait">Portrait</button>
+                        <button class="photo-mode-filter-btn flex-1 p-1 rounded-r-md bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200 text-xs" data-filter="UV">UV</button>
+                    </div>
+                    <div class="flex space-x-1 mt-1">
+                        <input type="date" id="photoDateFilter"
+                               class="flex-1 p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary">
+                        
+                        <select id="photoProcedureStatusFilter"
+                                class="p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option value="all">모든 시술시기</option>
+                            <option value="시술 전">시술 전</option> <option value="시술 후">시술 후</option> <option value="1W">시술 1주 후</option>
                             <option value="1M">시술 1개월 후</option>
                             <option value="3M">시술 3개월 후</option>
                             <option value="6M">시술 6개월 후</option>
@@ -123,14 +136,17 @@
                         </select>
                         
                         <select id="photoAngleFilter"
-                                class="p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary"> <option value="all">전체 각도</option>
+                                class="p-1 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option value="all">전체 각도</option>
                             <option value="C0">C0</option>
                             <option value="L45">L45</option>
                             <option value="R45">R45</option>
                         </select>
                     </div>
                 </div>
-                <ul id="photoList" class="p-1 grid grid-cols-2 gap-1"> <p class="col-span-2 text-center text-gray-500 py-2 text-xs">사진 목록을 불러오는 중...</p> </ul>
+                <ul id="photoList" class="p-1 grid grid-cols-2 gap-1">
+                    <p class="col-span-2 text-center text-gray-500 py-2 text-sm">사진 목록을 불러오는 중...</p>
+                </ul>
             </div>
 
             <div class="mt-4 flex flex-col space-y-2">
@@ -201,7 +217,6 @@
                 </div>
             </div>
 
-        
             <div id="analysisPanel" class="absolute right-0 top-0 h-full w-80 bg-gray-900 bg-opacity-90 text-white p-4 shadow-xl z-30 hidden overflow-y-auto">
                 <div class="pt-16"></div> 
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-700 pb-2">AI 분석 결과</h3>
@@ -209,7 +224,6 @@
                     <p>AI 분석 결과를 보려면 사진을 선택하고 'AI 분석' 버튼을 클릭해주세요.</p>
                 </div>
             </div>
-
         </main>
     </div>
 
