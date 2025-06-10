@@ -20,8 +20,9 @@ const db = getFirestore(app);
 const state = {
     selectedPatientId: null,
     primaryPhotoId: null,
+    secondaryPhotoId: null,
+    tertiaryPhotoId: null,
     comparePhotoIds: [],
-    currentPhotos: [], // 현재 로드된 사진 목록 전체를 저장
     currentModeFilter: 'all',
     currentDateFilter: '',
     currentAngleFilter: 'all',
@@ -43,18 +44,6 @@ const state = {
     lastTranslateX: 0,
     lastTranslateY: 0,
     stagedPhoto: null,
-    isDrawingMode: false,
-    drawingTool: 'free',
-    isDrawing: false,
-    drawingStartX: 0,
-    drawingStartY: 0,
-    drawingColor: '#FFFF00',
-    drawingLineWidth: 5,
-    drawingActions: [],
-    measurementPoints: [],
-    imageBrightness: 100,
-    imageContrast: 100,
-    imageGrayscale: 0,
 };
 
 function mapStatusToKorean(status) {
@@ -71,56 +60,90 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    document.getElementById('patientSearch').addEventListener('input', (e) => fetchPatients(e.target.value.toLowerCase()));
-    
-    document.querySelectorAll('.photo-mode-filter-btn').forEach(btn => btn.addEventListener('click', (e) => {
-        state.currentModeFilter = e.currentTarget.dataset.filter;
-        document.querySelectorAll('.photo-mode-filter-btn').forEach(b => {
-            b.classList.toggle('bg-[#4CAF50]', b === e.currentTarget);
-            b.classList.toggle('text-white', b === e.currentTarget);
-            b.classList.toggle('bg-gray-200', b !== e.currentTarget);
+    const patientSearch = document.getElementById('patientSearch');
+    patientSearch.addEventListener('input', (e) => {
+        fetchPatients(e.target.value.toLowerCase());
+    });
+
+    const photoModeFilterBtns = document.querySelectorAll('.photo-mode-filter-btn');
+    photoModeFilterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            state.currentModeFilter = btn.dataset.filter;
+            photoModeFilterBtns.forEach(b => {
+                const isSelected = b.dataset.filter === state.currentModeFilter;
+                b.classList.toggle('bg-[#4CAF50]', isSelected);
+                b.classList.toggle('text-white', isSelected);
+                b.classList.toggle('bg-gray-200', !isSelected);
+            });
+            fetchPhotos(state.selectedPatientId);
         });
-        applyPhotoFilters();
-    }));
+    });
 
-    document.getElementById('photoDateFilter').addEventListener('change', (e) => { state.currentDateFilter = e.target.value; applyPhotoFilters(); });
-    document.getElementById('photoAngleFilter').addEventListener('change', (e) => { state.currentAngleFilter = e.target.value; applyPhotoFilters(); });
-    document.getElementById('photoProcedureStatusFilter').addEventListener('change', (e) => { state.currentProcedureStatusFilter = e.target.value; applyPhotoFilters(); });
+    document.getElementById('photoDateFilter').addEventListener('change', (e) => {
+        state.currentDateFilter = e.target.value;
+        fetchPhotos(state.selectedPatientId);
+    });
 
-    document.getElementById('importPhotoBtn').addEventListener('click', () => document.getElementById('importChoiceOverlay').classList.remove('hidden'));
-    document.getElementById('startDrawingBtn').addEventListener('click', toggleDrawingMode);
+    document.getElementById('photoAngleFilter').addEventListener('change', (e) => {
+        state.currentAngleFilter = e.target.value;
+        fetchPhotos(state.selectedPatientId);
+    });
+
+    const photoProcedureStatusFilter = document.getElementById('photoProcedureStatusFilter');
+    if (photoProcedureStatusFilter) {
+        photoProcedureStatusFilter.addEventListener('change', (e) => {
+            state.currentProcedureStatusFilter = e.target.value;
+            fetchPhotos(state.selectedPatientId);
+        });
+    }
+
     document.getElementById('analyzeBtn').addEventListener('click', toggleAnalysisPanel);
     document.getElementById('compareBtn').addEventListener('click', handleCompareButtonClick);
-    document.getElementById('deletePhotoBtn').addEventListener('click', () => { if (state.primaryPhotoId) deletePhoto(state.primaryPhotoId); else alert('삭제할 사진이 선택되지 않았습니다.'); });
-    
-    document.getElementById('brightness').addEventListener('input', (e) => { state.imageBrightness = e.target.value; applyImageFiltersAndTransforms(); });
-    document.getElementById('contrast').addEventListener('input', (e) => { state.imageContrast = e.target.value; applyImageFiltersAndTransforms(); });
-    document.getElementById('grayscaleBtn').addEventListener('click', () => { 
-        state.imageGrayscale = state.imageGrayscale === 100 ? 0 : 100;
-        document.getElementById('grayscaleBtn').classList.toggle('bg-blue-500', state.imageGrayscale === 100);
-        document.getElementById('grayscaleBtn').classList.toggle('text-white', state.imageGrayscale === 100);
-        applyImageFiltersAndTransforms(); 
-    });
-    
+    document.getElementById('fullScreenBtn').addEventListener('click', toggleFullScreen);
     document.getElementById('zoomInBtn').addEventListener('click', () => zoomImage(state.zoomStep));
     document.getElementById('zoomOutBtn').addEventListener('click', () => zoomImage(-state.zoomStep));
-    document.getElementById('resetViewBtn').addEventListener('click', resetAllAdjustments);
-    document.getElementById('fullScreenBtn').addEventListener('click', toggleFullScreen);
+    document.getElementById('resetViewBtn').addEventListener('click', resetZoomAndPan);
     
+    document.getElementById('deletePhotoBtn').addEventListener('click', () => { 
+        if (state.primaryPhotoId) {
+            deletePhoto(state.primaryPhotoId);
+        } else {
+            alert('삭제할 사진이 선택되지 않았습니다.');
+        }
+    });
+
     document.getElementById('choose2PhotosBtn').addEventListener('click', () => startCompareSelection(2));
     document.getElementById('choose3PhotosBtn').addEventListener('click', () => startCompareSelection(3));
 
-    document.getElementById('image-container').addEventListener('wheel', handleMouseWheelZoom);
-    document.getElementById('image-container').addEventListener('mousedown', handleMouseDown);
+    const imageContainer = document.getElementById('image-container');
+    imageContainer.addEventListener('wheel', handleMouseWheelZoom);
+    imageContainer.addEventListener('mousedown', handleMouseDown);
 
-    document.getElementById('importFromLocalBtn').addEventListener('click', () => { document.getElementById('importChoiceOverlay').classList.add('hidden'); document.getElementById('localFileInput').click(); });
-    document.getElementById('importFromWebBtn').addEventListener('click', () => { document.getElementById('importChoiceOverlay').classList.add('hidden'); showWebImageSelectModal(); });
-    document.getElementById('closeImportChoiceModal').addEventListener('click', () => document.getElementById('importChoiceOverlay').classList.add('hidden'));
+    document.getElementById('importPhotoBtn').addEventListener('click', () => {
+        document.getElementById('importChoiceOverlay').classList.remove('hidden');
+    });
+    document.getElementById('importFromLocalBtn').addEventListener('click', () => {
+        document.getElementById('importChoiceOverlay').classList.add('hidden');
+        document.getElementById('localFileInput').click();
+    });
+    document.getElementById('importFromWebBtn').addEventListener('click', () => {
+        document.getElementById('importChoiceOverlay').classList.add('hidden');
+        showWebImageSelectModal();
+    });
+    document.getElementById('closeImportChoiceModal').addEventListener('click', () => {
+        document.getElementById('importChoiceOverlay').classList.add('hidden');
+    });
+
     document.getElementById('localFileInput').addEventListener('change', handleLocalFileSelect);
-    document.getElementById('closeWebImageSelectModal').addEventListener('click', () => document.getElementById('webImageSelectOverlay').classList.add('hidden'));
+    
+    document.getElementById('closeWebImageSelectModal').addEventListener('click', () => {
+        document.getElementById('webImageSelectOverlay').classList.add('hidden');
+    });
+
     document.getElementById('addPatientBtn').addEventListener('click', addNewPatient);
 
-    document.querySelectorAll('#mainImageWrapper, #compareImageWrapper, #tertiaryImageWrapper').forEach(wrapper => {
+    const imageWrappers = document.querySelectorAll('#mainImageWrapper, #compareImageWrapper, #tertiaryImageWrapper');
+    imageWrappers.forEach(wrapper => {
         wrapper.draggable = true;
         wrapper.addEventListener('dragstart', handleDragStart);
         wrapper.addEventListener('dragover', handleDragOver);
@@ -128,234 +151,6 @@ function setupEventListeners() {
         wrapper.addEventListener('drop', handleDrop);
         wrapper.addEventListener('dragend', handleDragEnd);
     });
-
-    document.querySelectorAll('.drawing-tool-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            state.drawingTool = e.currentTarget.dataset.tool;
-            state.measurementPoints = [];
-            document.querySelectorAll('.drawing-tool-btn').forEach(b => b.classList.remove('active'));
-            e.currentTarget.classList.add('active');
-        });
-    });
-
-    document.getElementById('lineColor').addEventListener('input', (e) => { state.drawingColor = e.target.value; });
-    document.getElementById('lineWidth').addEventListener('input', (e) => { state.drawingLineWidth = parseInt(e.target.value, 10); });
-    document.getElementById('clearDrawingBtn').addEventListener('click', clearAllDrawings);
-    document.getElementById('toggleDrawingBtn').addEventListener('click', toggleDrawingMode);
-
-    const drawingCanvas = document.getElementById('drawingCanvas');
-    drawingCanvas.addEventListener('mousedown', handleDrawingMouseDown);
-    drawingCanvas.addEventListener('mousemove', handleDrawingMouseMove);
-    drawingCanvas.addEventListener('mouseup', handleDrawingMouseUp);
-    drawingCanvas.addEventListener('mouseleave', handleDrawingMouseUp);
-}
-
-function toggleDrawingMode() {
-    state.isDrawingMode = !state.isDrawingMode;
-    const drawingToolbar = document.getElementById('drawing-toolbar');
-    const drawingCanvas = document.getElementById('drawingCanvas');
-    const imageContainer = document.getElementById('image-container');
-
-    if (state.isDrawingMode) {
-        if(state.isAnalysisPanelVisible) toggleAnalysisPanel();
-        drawingToolbar.classList.remove('hidden');
-        drawingCanvas.style.pointerEvents = 'auto';
-        imageContainer.classList.remove('cursor-grab');
-        imageContainer.classList.add('cursor-crosshair');
-        document.querySelector('.drawing-tool-btn[data-tool="free"]').classList.add('active');
-    } else {
-        drawingToolbar.classList.add('hidden');
-        drawingCanvas.style.pointerEvents = 'none';
-        imageContainer.classList.remove('cursor-crosshair');
-        imageContainer.classList.add('cursor-grab');
-        document.querySelectorAll('.drawing-tool-btn').forEach(b => b.classList.remove('active'));
-    }
-}
-
-function handleDrawingMouseDown(e) {
-    if (!state.isDrawingMode) return;
-    const { x, y } = getCanvasCoordinates(e);
-    
-    const tool = state.drawingTool;
-    if (tool === 'ruler' || tool === 'angle') {
-        state.measurementPoints.push({ x, y });
-        handleMeasurement(tool);
-    } else {
-        state.isDrawing = true;
-        state.drawingStartX = x;
-        state.drawingStartY = y;
-        if (tool === 'free') {
-            state.drawingActions.push({ type: 'free', points: [{ x, y }], color: state.drawingColor, width: state.drawingLineWidth });
-        } else if (tool === 'text') {
-            const text = prompt('입력할 텍스트:');
-            if (text) {
-                state.drawingActions.push({ type: 'text', text, x, y, color: state.drawingColor, width: state.drawingLineWidth });
-                redrawAllDrawings();
-            }
-            state.isDrawing = false;
-        }
-    }
-}
-
-function handleMeasurement(tool) {
-    if (tool === 'ruler' && state.measurementPoints.length === 2) {
-        const [p1, p2] = state.measurementPoints;
-        const distance = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-        const text = `${distance.toFixed(1)}px`;
-        state.drawingActions.push({ type: 'line', startX: p1.x, startY: p1.y, endX: p2.x, endY: p2.y, color: state.drawingColor, width: state.drawingLineWidth });
-        state.drawingActions.push({ type: 'text', text, x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 - 10, color: state.drawingColor, width: state.drawingLineWidth });
-        state.measurementPoints = [];
-    } else if (tool === 'angle' && state.measurementPoints.length === 3) {
-        const [p1, p2, p3] = state.measurementPoints;
-        state.drawingActions.push({ type: 'line', startX: p1.x, startY: p1.y, endX: p2.x, endY: p2.y, color: state.drawingColor, width: state.drawingLineWidth });
-        state.drawingActions.push({ type: 'line', startX: p3.x, startY: p3.y, endX: p2.x, endY: p2.y, color: state.drawingColor, width: state.drawingLineWidth });
-        const angle = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
-        let angleDeg = angle * 180 / Math.PI;
-        if (angleDeg < 0) angleDeg += 360;
-        if (angleDeg > 180) angleDeg = 360 - angleDeg;
-        const text = `${angleDeg.toFixed(1)}°`;
-        state.drawingActions.push({ type: 'text', text, x: p2.x + 10, y: p2.y - 10, color: state.drawingColor, width: state.drawingLineWidth });
-        state.measurementPoints = [];
-    }
-    redrawAllDrawings();
-}
-
-function handleDrawingMouseMove(e) {
-    if (!state.isDrawing || !state.isDrawingMode) return;
-    const { x, y } = getCanvasCoordinates(e);
-    redrawAllDrawings(); 
-    const ctx = document.getElementById('drawingCanvas').getContext('2d');
-    setupContext(ctx);
-
-    switch(state.drawingTool) {
-        case 'free':
-            const currentPath = state.drawingActions[state.drawingActions.length - 1];
-            currentPath.points.push({ x, y });
-            drawAction(ctx, currentPath);
-            break;
-        case 'line':
-            drawAction(ctx, { type: 'line', startX: state.drawingStartX, startY: state.drawingStartY, endX: x, endY: y });
-            break;
-        case 'rect':
-            drawAction(ctx, { type: 'rect', startX: state.drawingStartX, startY: state.drawingStartY, endX: x, endY: y });
-            break;
-        case 'circle':
-            const radius = Math.sqrt(Math.pow(x - state.drawingStartX, 2) + Math.pow(y - state.drawingStartY, 2));
-            drawAction(ctx, { type: 'circle', startX: state.drawingStartX, startY: state.drawingStartY, radius });
-            break;
-    }
-}
-
-function handleDrawingMouseUp(e) {
-    if (!state.isDrawing || !state.isDrawingMode) return;
-    state.isDrawing = false;
-    const { x, y } = getCanvasCoordinates(e);
-    let newAction;
-
-    switch(state.drawingTool) {
-        case 'line': newAction = { type: 'line', startX: state.drawingStartX, startY: state.drawingStartY, endX: x, endY: y, color: state.drawingColor, width: state.drawingLineWidth }; break;
-        case 'rect': newAction = { type: 'rect', startX: state.drawingStartX, startY: state.drawingStartY, endX: x, endY: y, color: state.drawingColor, width: state.drawingLineWidth }; break;
-        case 'circle': const r = Math.sqrt(Math.pow(x - state.drawingStartX, 2) + Math.pow(y - state.drawingStartY, 2)); newAction = { type: 'circle', startX: state.drawingStartX, startY: state.drawingStartY, radius: r, color: state.drawingColor, width: state.drawingLineWidth }; break;
-        default: redrawAllDrawings(); return;
-    }
-    state.drawingActions.push(newAction);
-    redrawAllDrawings();
-}
-
-function getCanvasCoordinates(event) {
-    const canvas = document.getElementById('drawingCanvas');
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return { x: (event.clientX - rect.left) * scaleX, y: (event.clientY - rect.top) * scaleY };
-}
-
-function setupContext(ctx, action = {}) {
-    ctx.strokeStyle = action.color || state.drawingColor;
-    ctx.fillStyle = action.color || state.drawingColor;
-    ctx.lineWidth = action.width || state.drawingLineWidth;
-    ctx.lineCap = 'round';
-    ctx.font = `${(action.width || state.drawingLineWidth) * 3}px sans-serif`;
-}
-
-function drawAction(ctx, action) {
-    switch(action.type) {
-        case 'free': ctx.beginPath(); ctx.moveTo(action.points[0].x, action.points[0].y); action.points.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke(); break;
-        case 'line': ctx.beginPath(); ctx.moveTo(action.startX, action.startY); ctx.lineTo(action.endX, action.endY); ctx.stroke(); break;
-        case 'rect': ctx.strokeRect(action.startX, action.startY, action.endX - action.startX, action.endY - action.startY); break;
-        case 'circle': ctx.beginPath(); ctx.arc(action.startX, action.startY, action.radius, 0, Math.PI * 2); ctx.stroke(); break;
-        case 'text': ctx.fillText(action.text, action.x, action.y); break;
-    }
-}
-
-function redrawAllDrawings() {
-    const canvas = document.getElementById('drawingCanvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    state.drawingActions.forEach(action => {
-        setupContext(ctx, action);
-        drawAction(ctx, action);
-    });
-}
-
-function clearAllDrawings() {
-    state.drawingActions = [];
-    state.measurementPoints = [];
-    redrawAllDrawings();
-}
-
-function syncCanvasSize() {
-    const mainImage = document.getElementById('mainImage');
-    const analysisCanvas = document.getElementById('analysisCanvas');
-    const drawingCanvas = document.getElementById('drawingCanvas');
-    if (!mainImage || !mainImage.naturalWidth || mainImage.naturalWidth === 0) return;
-    
-    const { naturalWidth: width, naturalHeight: height } = mainImage;
-    if (analysisCanvas.width !== width || analysisCanvas.height !== height) {
-        analysisCanvas.width = width; 
-        analysisCanvas.height = height;
-    }
-    if (drawingCanvas.width !== width || drawingCanvas.height !== height) {
-        drawingCanvas.width = width; 
-        drawingCanvas.height = height;
-        redrawAllDrawings();
-    }
-    
-    if (state.isAnalysisPanelVisible && state.primaryPhotoId) {
-        getPhotoById(state.primaryPhotoId).then(photo => { if (photo) renderAnalysis(photo); });
-    }
-}
-
-function applyImageFiltersAndTransforms() {
-    const filterValue = `brightness(${state.imageBrightness}%) contrast(${state.imageContrast}%) grayscale(${state.imageGrayscale}%)`;
-    const transformValue = `translate(${state.currentTranslateX}px, ${state.currentTranslateY}px) scale(${state.currentZoomLevel})`;
-    
-    document.querySelectorAll('#mainImage, #compareImage, #tertiaryImage').forEach(img => {
-        if(img) {
-            img.style.filter = filterValue;
-            img.style.transform = transformValue;
-        }
-    });
-
-    document.querySelectorAll('#analysisCanvas, #drawingCanvas').forEach(canvas => {
-        if (canvas) canvas.style.transform = transformValue;
-    });
-}
-
-function resetAllAdjustments() {
-    state.currentZoomLevel = 1.0;
-    state.currentTranslateX = 0;
-    state.currentTranslateY = 0;
-    state.lastTranslateX = 0;
-    state.lastTranslateY = 0;
-    state.imageBrightness = 100; 
-    state.imageContrast = 100; 
-    state.imageGrayscale = 0;
-    document.getElementById('brightness').value = 100;
-    document.getElementById('contrast').value = 100;
-    document.getElementById('grayscaleBtn').classList.remove('bg-blue-500', 'text-white');
-    applyImageFiltersAndTransforms(); 
 }
 
 async function getPhotoById(photoId) {
@@ -396,7 +191,14 @@ function renderPatientList(patients) {
         const li = document.createElement('li');
         li.className = 'patient-list-item py-1 px-2 cursor-pointer border-b border-gray-200 flex justify-between items-center text-sm';
         if(patient.id === state.selectedPatientId) li.classList.add('selected');
-        li.innerHTML = `<div><p class="font-semibold text-sm">${patient.name}</p><p class="text-xs text-gray-500">${patient.chartId || ''} | ${patient.birth || ''}</p></div><span class="text-xs text-gray-400">></span>`;
+
+        li.innerHTML = `
+            <div>
+                <p class="font-semibold text-sm">${patient.name}</p>
+                <p class="text-xs text-gray-500">${patient.chartId || ''} | ${patient.birth || ''}</p>
+            </div>
+            <span class="text-xs text-gray-400">></span>
+        `;
         li.addEventListener('click', () => selectPatient(patient.id));
         patientListEl.appendChild(li);
     });
@@ -411,6 +213,7 @@ async function addNewPatient() {
     if (!gender) return;
     const chartId = prompt("새 환자의 차트 ID를 입력해주세요 (예: C-20240001):");
     if (!chartId) return;
+
     try {
         await addDoc(collection(db, 'patients'), { name, birth, gender, chartId, createdAt: new Date() });
         alert(`${name} 환자가 성공적으로 추가되었습니다!`);
@@ -422,10 +225,8 @@ async function addNewPatient() {
 }
 
 async function selectPatient(patientId) {
-    resetViewerToPlaceholder(); 
     state.selectedPatientId = patientId;
     
-    // Reset filters
     state.currentModeFilter = 'all';
     state.currentDateFilter = '';
     state.currentAngleFilter = 'all';
@@ -461,44 +262,31 @@ async function fetchPhotos(patientId) {
     photoListEl.innerHTML = '<p class="col-span-2 text-center text-gray-500 py-2 text-xs">사진 목록을 불러오는 중...</p>'; 
 
     try {
-        const q = query(collection(db, 'photos'), where('patientId', '==', patientId));
-        const photoSnapshot = await getDocs(q);
-        state.currentPhotos = photoSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        state.currentPhotos.sort((a, b) => (b.uploadedAt?.toDate() || 0) - (a.uploadedAt?.toDate() || 0));
-        
-        applyPhotoFilters();
+        let q = query(collection(db, 'photos'), where('patientId', '==', patientId));
+        if (state.currentModeFilter !== 'all') q = query(q, where('mode', '==', state.currentModeFilter));
+        if (state.currentDateFilter) q = query(q, where('date', '==', state.currentDateFilter));
+        if (state.currentAngleFilter !== 'all') q = query(q, where('viewAngle', '==', state.currentAngleFilter));
+        if (state.currentProcedureStatusFilter !== 'all') q = query(q, where('procedureStatus', '==', state.currentProcedureStatusFilter));
 
-        if (state.currentPhotos.length > 0) {
-            const isPrimaryPhotoVisible = document.getElementById('mainImage').src !== '';
-            if (!isPrimaryPhotoVisible) {
-                const visiblePhotos = getVisiblePhotos();
-                if(visiblePhotos.length > 0){
-                    await selectPhoto(visiblePhotos[0].id);
-                }
+        const photoSnapshot = await getDocs(q);
+        let photos = photoSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        photos.sort((a, b) => (b.uploadedAt?.toDate() || 0) - (a.uploadedAt?.toDate() || 0));
+        
+        renderPhotoList(photos);
+
+        if (photos.length > 0) {
+            const currentPhotoStillExists = state.primaryPhotoId && photos.some(p => p.id === state.primaryPhotoId);
+            if (!currentPhotoStillExists) {
+                await selectPhoto(photos[0].id);
             }
         } else {
-           resetViewerToPlaceholder();
+            resetViewerToPlaceholder();
         }
 
     } catch (error) {
         console.error("사진 목록 불러오는 중 오류:", error);
         photoListEl.innerHTML = '<p class="col-span-2 text-center text-red-500 py-2 text-xs">사진을 불러오지 못했습니다.</p>';
     }
-}
-
-function getVisiblePhotos() {
-    return state.currentPhotos.filter(photo => {
-        const modeMatch = state.currentModeFilter === 'all' || photo.mode === state.currentModeFilter;
-        const dateMatch = !state.currentDateFilter || photo.date === state.currentDateFilter;
-        const angleMatch = state.currentAngleFilter === 'all' || photo.viewAngle === state.currentAngleFilter;
-        const procedureMatch = state.currentProcedureStatusFilter === 'all' || photo.procedureStatus === state.currentProcedureStatusFilter;
-        return modeMatch && dateMatch && angleMatch && procedureMatch;
-    });
-}
-
-function applyPhotoFilters() {
-    const visiblePhotos = getVisiblePhotos();
-    renderPhotoList(visiblePhotos);
 }
 
 function renderPhotoList(photos) {
@@ -536,11 +324,13 @@ function renderPhotoList(photos) {
 }
 
 async function selectPhoto(photoId) {
-    if (state.isDrawingMode) toggleDrawingMode();
     if (state.isAnalysisPanelVisible) toggleAnalysisPanel();
     
     const photo = await getPhotoById(photoId);
-    if (!photo) return alert("선택된 사진 정보를 찾을 수 없습니다.");
+    if (!photo) {
+        alert("선택된 사진 정보를 찾을 수 없습니다.");
+        return;
+    }
 
     if (state.isCompareSelectionActive) {
         if (state.compareSelectionStep === 1) {
@@ -561,12 +351,17 @@ async function selectPhoto(photoId) {
             state.isComparingPhotos = true;
             document.getElementById('compareBtn').innerText = '비교 해제';
         }
+        await updateComparisonDisplay();
     } else {
         state.primaryPhotoId = photoId;
         state.comparePhotoIds = [photoId];
+        await updateComparisonDisplay();
     }
-    await updateComparisonDisplay();
-    applyPhotoFilters();
+    
+    const photoListSnapshot = await getDocs(query(collection(db, 'photos'), where('patientId', '==', state.selectedPatientId)));
+    const photos = photoListSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+    photos.sort((a, b) => (b.uploadedAt?.toDate() || 0) - (a.uploadedAt?.toDate() || 0));
+    renderPhotoList(photos);
 }
 
 function toggleAnalysisPanel() {
@@ -575,13 +370,15 @@ function toggleAnalysisPanel() {
     const btn = document.getElementById('analyzeBtn');
 
     if (state.isAnalysisPanelVisible) {
-        if(state.isDrawingMode) toggleDrawingMode();
         panel.classList.remove('hidden');
         btn.classList.add('bg-green-200');
         if (state.primaryPhotoId) {
             getPhotoById(state.primaryPhotoId).then(photo => {
-                if (photo && photo.ai_analysis) renderAnalysis(photo);
-                else document.getElementById('analysisContent').innerHTML = "<p>분석 데이터가 없습니다.</p>";
+                if (photo && photo.ai_analysis) {
+                    renderAnalysis(photo);
+                } else {
+                    document.getElementById('analysisContent').innerHTML = "<p>분석 데이터가 없습니다.</p>";
+                }
             });
         } else {
             document.getElementById('analysisContent').innerHTML = "<p>사진을 먼저 선택해주세요.</p>";
@@ -598,7 +395,6 @@ function renderAnalysis(photo) {
 }
 
 async function updateComparisonDisplay() {
-    clearAllDrawings();
     const imageViewer = document.getElementById('imageViewer');
     const placeholder = document.getElementById('viewerPlaceholder');
     const wrappers = [document.getElementById('mainImageWrapper'), document.getElementById('compareImageWrapper'), document.getElementById('tertiaryImageWrapper')];
@@ -629,9 +425,7 @@ async function updateComparisonDisplay() {
                 if (!patientData) patientData = (await getDoc(doc(db, 'patients', photo.patientId))).data();
                 infoTexts.push(`${photo.date} ${photo.mode}`);
                 img.src = photo.url;
-                img.onload = () => { syncCanvasSize(); };
                 wrapper.classList.remove('hidden');
-                wrapper.dataset.photoId = photoId;
             }
         } else {
             wrapper.classList.add('hidden');
@@ -641,7 +435,7 @@ async function updateComparisonDisplay() {
     document.getElementById('viewerPatientName').innerText = patientData ? `${patientData.name} (${patientData.chartId})` : '사진 뷰어';
     document.getElementById('viewerPhotoInfo').innerText = infoTexts.join(' vs ');
     
-    resetAllAdjustments();
+    resetZoomAndPan();
 }
 
 function resetViewerToPlaceholder() {
@@ -677,37 +471,52 @@ function startCompareSelection(count) {
 
 function toggleFullScreen() {
     document.getElementById('mainViewer').classList.toggle('full-screen-viewer');
-    document.querySelector('aside#patient-panel').classList.toggle('hidden');
-    document.querySelector('aside#photo-panel').classList.toggle('hidden');
+    document.getElementById('sidebar').classList.toggle('hidden');
+}
+
+function applyTransforms() {
+    const transform = `translate(${state.currentTranslateX}px, ${state.currentTranslateY}px) scale(${state.currentZoomLevel})`;
+    document.querySelectorAll('#mainImage, #compareImage, #tertiaryImage, #analysisCanvas').forEach(el => {
+        if (el) el.style.transform = transform;
+    });
 }
 
 function zoomImage(step) {
     let newZoomLevel = state.currentZoomLevel + step;
     state.currentZoomLevel = Math.max(state.minZoom, Math.min(state.maxZoom, newZoomLevel));
-    applyImageFiltersAndTransforms();
+    applyTransforms();
+}
+
+function resetZoomAndPan() {
+    state.currentZoomLevel = 1.0;
+    state.currentTranslateX = 0;
+    state.currentTranslateY = 0;
+    state.lastTranslateX = 0;
+    state.lastTranslateY = 0;
+    applyTransforms();
 }
 
 function handleMouseWheelZoom(e) {
-    if (state.isDrawingMode) return;
     e.preventDefault();
     zoomImage(e.deltaY < 0 ? state.zoomStep : -state.zoomStep);
 }
 
 function handleMouseDown(e) {
-    if (state.isDrawingMode || e.button !== 0) return;
-    state.isDragging = true;
-    state.startX = e.clientX - state.lastTranslateX;
-    state.startY = e.clientY - state.lastTranslateY;
-    document.getElementById('image-container').classList.add('cursor-grabbing');
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    if (e.button === 0) {
+        state.isDragging = true;
+        state.startX = e.clientX - state.lastTranslateX;
+        state.startY = e.clientY - state.lastTranslateY;
+        document.getElementById('image-container').classList.add('cursor-grabbing');
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    }
 }
 
 function handleMouseMove(e) {
     if (state.isDragging) {
         state.currentTranslateX = e.clientX - state.startX;
         state.currentTranslateY = e.clientY - state.startY;
-        applyImageFiltersAndTransforms();
+        applyTransforms();
     }
 }
 
@@ -720,19 +529,28 @@ function handleMouseUp() {
     document.removeEventListener('mouseup', handleMouseUp);
 }
 
-function handleDragStart(e) { /* Stub */ }
+function handleDragStart(e) {
+    const wrapper = e.target.closest('.image-wrapper');
+    if (wrapper && wrapper.dataset.photoId) {
+        e.dataTransfer.setData('text/plain', wrapper.dataset.photoId);
+    }
+}
 function handleDragOver(e) { e.preventDefault(); }
-function handleDragLeave(e) { /* Stub */ }
-async function handleDrop(e) { /* Stub */ }
-function handleDragEnd(e) { /* Stub */ }
+function handleDragLeave(e) { /* Placeholder */ }
+async function handleDrop(e) { /* Placeholder */ }
+function handleDragEnd(e) { /* Placeholder */ }
 
-function generateSampleAIAnalysis(mode) { return {}; }
+function generateSampleAIAnalysis(mode) { 
+    return { type: mode, detail: `Sample analysis for ${mode}`}; 
+}
 
 async function handleLocalFileSelect(event) {
     const file = event.target.files[0]; 
     if (!file) return;
-    if (!state.selectedPatientId) return alert('먼저 환자를 선택해주세요.');
-
+    if (!state.selectedPatientId) {
+        alert('먼저 환자를 선택해주세요.');
+        return;
+    }
     const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
     const parts = baseName.split('_');
     const photoMode = parts[2] || 'PC Upload';
@@ -745,8 +563,43 @@ async function handleLocalFileSelect(event) {
     await displayImageAndSave(file, 'local', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatusInKorean);
 }
 
-async function showWebImageSelectModal() { /* Stub */ }
-async function selectWebImageFromStorage(imageUrl, fileName) { /* Stub */ }
+async function showWebImageSelectModal() {
+    const modal = document.getElementById('webImageSelectOverlay');
+    const list = document.getElementById('storageImageList');
+    modal.classList.remove('hidden');
+    list.innerHTML = `<p>로딩 중...</p>`;
+    try {
+        const res = await listAll(ref(storage, 'images/'));
+        list.innerHTML = '';
+        res.items.forEach(async (itemRef) => {
+            const url = await getDownloadURL(itemRef);
+            const div = document.createElement('div');
+            div.innerHTML = `<img src="${url}" class="w-24 h-24 object-cover cursor-pointer"><p class="text-xs truncate">${itemRef.name}</p>`;
+            div.addEventListener('click', () => selectWebImageFromStorage(url, itemRef.name));
+            list.appendChild(div);
+        });
+    } catch (e) {
+        list.innerHTML = `<p>오류: ${e.message}</p>`;
+    }
+}
+
+async function selectWebImageFromStorage(imageUrl, fileName) {
+    document.getElementById('webImageSelectOverlay').classList.add('hidden');
+    if (!state.selectedPatientId) {
+        alert('먼저 환자를 선택해주세요.');
+        return;
+    }
+    const baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+    const parts = baseName.split('_');
+    const photoMode = parts[2] || 'Web Upload';
+    const viewAngle = parts[3] || 'C0';
+    const datePart = parts[4] || new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
+    const procedureStatusInEnglish = parts[5] || 'None';
+    const procedureStatusInKorean = mapStatusToKorean(procedureStatusInEnglish);
+    const aiAnalysisData = generateSampleAIAnalysis(photoMode);
+    await displayImageAndSave(imageUrl, 'web', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatusInKorean);
+}
 
 async function displayImageAndSave(source, sourceType, patientId, photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatus) {
     try {
@@ -768,7 +621,9 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
     const url = sourceType === 'local' ? URL.createObjectURL(source) : source;
     state.stagedPhoto = { url, mode: photoMode, viewAngle, file: sourceType === 'local' ? source : null, date: photoDate, ai_analysis: aiAnalysisData, procedureStatus };
     state.primaryPhotoId = null;
-    await updateComparisonDisplay(); // This is incorrect, needs to be handled better
+    await updateComparisonDisplay();
+    document.getElementById('viewerPatientName').innerText = `환자 미지정`;
+    document.getElementById('viewerPhotoInfo').innerText = `${photoDate} | ${photoMode}`;
 }
 
 async function deletePhoto(photoId) {

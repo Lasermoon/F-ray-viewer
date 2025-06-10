@@ -26,10 +26,10 @@
         body { -ms-overflow-style: none; scrollbar-width: none; }
         .patient-list-item.selected { background-color: #e0f2f1; font-weight: 600; }
         .photo-list-item.selected { background-color: #e8f5e9; border: 1px solid #a5d6a7; }
-        .full-screen-viewer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; background-color: #1a202c; overflow: hidden; }
+        .full-screen-viewer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; }
         .image-wrapper.drag-over { border: 2px dashed #4CAF50; }
-        .image-wrapper.dragging-source { opacity: 0.5; border: 2px solid #2196F3; }
-        #image-container.cursor-grabbing { cursor: grabbing; cursor: -webkit-grabbing; }
+        .image-wrapper.dragging-source { opacity: 0.5; }
+        #image-container.cursor-grabbing { cursor: grabbing; -webkit-grabbing: grabbing; }
         #analysisCanvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 10; transform-origin: top left; }
         .text-xxs { font-size: 0.65rem; line-height: 0.8rem; }
     </style>
@@ -106,10 +106,10 @@
                     <p id="viewerPhotoInfo" class="text-sm text-gray-400">사진 정보를 선택해주세요.</p>
                 </div>
                 <div class="flex space-x-2">
-                    <button id="analyzeBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600 transition-colors duration-200 shadow">AI 분석</button>
-                    <button id="compareBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600 transition-colors duration-200 shadow">사진 비교</button>
-                    <button id="fullScreenBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600 transition-colors duration-200 shadow">전체 화면</button>
-                    <button id="deletePhotoBtn" class="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 transition-colors duration-200 shadow">선택 사진 삭제</button>
+                    <button id="analyzeBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600">AI 분석</button>
+                    <button id="compareBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600">사진 비교</button>
+                    <button id="fullScreenBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600">전체 화면</button>
+                    <button id="deletePhotoBtn" class="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600">선택 사진 삭제</button>
                 </div>
             </div>
 
