@@ -199,7 +199,7 @@ async function getPhotoById(photoId) {
     console.log('getPhotoById 호출됨. photoId:', photoId); // 디버깅 로그 추가
     if (!photoId) return null;
     const photoDoc = await getDoc(doc(db, 'photos', photoId));
-    const photoData = photoDoc.exists() ? { id: photoDoc.id, ...photoDoc.data() } : null;
+    const photoData = photoDoc.exists() ? { id: photoDoc.id, ...doc.data() } : null;
     console.log('getPhotoById 결과:', photoData); // 디버깅 로그 추가
     return photoData;
 }
@@ -328,7 +328,7 @@ async function selectPatient(patientId) {
                 viewAngle: viewAngle,
                 date: date, // staged photo에서 가져온 date
                 uploadedAt: new Date(),
-                ai_analysis: ai_analysis, // staged photo에서 가져온 AI 분석 데이터
+                ai_analysis: aiAnalysisData, // staged photo에서 가져온 AI 분석 데이터
                 procedureStatus: procedureStatus // [변경] staged photo에서 가져온 시술 상태
             };
             const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
@@ -391,7 +391,7 @@ async function selectPatient(patientId) {
     }
     
     console.log('fetchPhotos 함수 호출 시작 (selectPatient).'); // 디버깅 로그 추가
-    fetchPhotos(patientId); // 필터링된 사진 목록을 불러옵니다.
+    fetchPhotos(patientId); // 필터링된 사진 목록을 다시 불러옵니다.
     console.log('selectPatient 함수 종료.'); // 디버깅 로그 추가
 }
 
