@@ -416,6 +416,7 @@ async function selectPatient(patientId) {
     fetchPhotos(patientId);
 }
 
+// fetchPhotos: Firestore에서 특정 환자의 사진 목록을 불러와 화면에 그립니다.
 async function fetchPhotos(patientId) {
     if (!patientId) {
         renderPhotoList([]);
@@ -434,9 +435,26 @@ async function fetchPhotos(patientId) {
         const photoSnapshot = await getDocs(q);
         let photos = photoSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         photos.sort((a, b) => (b.uploadedAt?.toDate() || 0) - (a.uploadedAt?.toDate() || 0));
+        
+        // 썸네일 목록을 먼저 렌더링합니다.
         renderPhotoList(photos);
 
-        if (photos.length === 0) photoListEl.innerHTML = '<p class="col-span-full text-center text-gray-500 py-2 text-xs">표시할 사진이 없습니다.</p>';
+        // ======================= [수정된 로직 시작] =======================
+        if (photos.length > 0) {
+            // 현재 뷰어에 표시된 사진이 필터링된 목록에 여전히 존재하는지 확인합니다.
+            const currentPhotoStillExists = state.primaryPhotoId && photos.some(p => p.id === state.primaryPhotoId);
+
+            // 만약 현재 표시된 사진이 없거나, 필터링으로 인해 사라졌다면
+            // 새로운 목록의 첫 번째 사진을 자동으로 선택하여 보여줍니다.
+            if (!currentPhotoStillExists) {
+                await selectPhoto(photos[0].id);
+            }
+        } else {
+            // 필터링 결과 사진이 하나도 없으면 뷰어를 초기화합니다.
+            resetViewerToPlaceholder();
+        }
+        // ======================= [수정된 로직 끝] =========================
+
     } catch (error) {
         console.error("사진 목록 불러오는 중 오류:", error);
         photoListEl.innerHTML = '<p class="col-span-full text-center text-red-500 py-2 text-xs">사진을 불러오지 못했습니다.</p>';
