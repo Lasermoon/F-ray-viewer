@@ -551,7 +551,6 @@ async function selectPhoto(photoId) {
                 document.getElementById('compareBtn').innerText = '사진비교 해제'; // Change button to cancel
             } else if (state.compareCount === 3) {
                 console.log('두 번째 사진 선택 완료. 세 번째 사진 선택 단계로 이동.');
-                state.compareSelectionStep = 2; // Move to third photo selection
                 document.getElementById('compareBtn').innerText = '비교할 세 번째 사진 선택...';
                 alert('비교할 세 번째 사진을 좌측 목록에서 선택해주세요.');
             }
@@ -866,12 +865,6 @@ function generateSampleAIAnalysis(mode) {
             pores: Math.floor(Math.random() * 30) + 10,   // 10-39 사이 (퍼센트)
             spots: Math.floor(Math.random() * 15) + 3    // 3-17 사이
         };
-    } else if (mode.includes('UV')) { // UV 포함하는 경우
-        analysis = {
-            type: 'uv',
-            pigmentation: Math.floor(Math.random() * 100), // 0-99 사이
-            sebum: Math.floor(Math.random() * 100)      // 0-99 사이
-        };
     } else {
         analysis = {
             type: 'general',
@@ -886,7 +879,7 @@ async function handleLocalFileSelect(event) {
     console.log("handleLocalFileSelect 함수 실행됨."); // 디버깅 로그 추가
     const file = event.target.files[0]; 
     if (!file) { console.log("선택된 파일 없음."); return; }
-    console.log("선택된 파일:", file.name);
+    console.log(" 선택된 파일:", file.name);
 
     // 파일 이름과 확장자를 가져옵니다.
     const fileName = file.name;
