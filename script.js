@@ -884,30 +884,39 @@ async function resetComparisonView() {
     await updateComparisonDisplay();
 }
 
+// ========================= [코드 수정] =========================
+// '전체 화면' 버튼 클릭 시, 기존 sidebar 대신 새로운 패널 두 개를 제어하도록 수정합니다.
 function toggleFullScreen() {
-    const sidebar = document.getElementById('sidebar');
+    const patientPanel = document.getElementById('patient-panel');
+    const photoPanel = document.getElementById('photo-panel');
     const mainViewer = document.getElementById('mainViewer');
     const fullScreenBtn = document.getElementById('fullScreenBtn');
     const isSimulatedFullScreen = mainViewer.classList.contains('full-screen-viewer');
 
     if (isSimulatedFullScreen) {
-        sidebar.classList.remove('hidden'); 
-        mainViewer.classList.remove('full-screen-viewer', 'w-full'); 
-        mainViewer.classList.add('md:w-2/3', 'lg:w-3/4'); 
-        fullScreenBtn.innerText = '전체 화면'; 
+        // 전체 화면 종료: 좌측, 중앙 패널을 다시 보이게 함
+        patientPanel.classList.remove('hidden');
+        photoPanel.classList.remove('hidden');
+        mainViewer.classList.remove('full-screen-viewer');
+        fullScreenBtn.innerText = '전체 화면';
     } else {
-        sidebar.classList.add('hidden'); 
-        mainViewer.classList.add('full-screen-viewer', 'w-full'); 
-        mainViewer.classList.remove('md:w-2/3', 'lg:w-3/4'); 
-        fullScreenBtn.innerText = '전체 화면 종료'; 
+        // 전체 화면 시작: 좌측, 중앙 패널을 숨김
+        patientPanel.classList.add('hidden');
+        photoPanel.classList.add('hidden');
+        mainViewer.classList.add('full-screen-viewer');
+        fullScreenBtn.innerText = '전체 화면 종료';
     }
+
+    // 화면 크기 변경 후 분석 결과를 다시 렌더링 (캔버스 크기 재조정)
     if (state.isAnalysisPanelVisible && state.primaryPhotoId) {
         getPhotoById(state.primaryPhotoId).then(photo => {
             if (photo) renderAnalysis(photo);
         });
     }
-    resetZoomAndPan(); 
+    // 화면 크기 변경 후 줌/이동 초기화
+    resetZoomAndPan();
 }
+// =============================================================
 
 function applyTransforms() {
     const images = [document.getElementById('mainImage'), document.getElementById('compareImage'), document.getElementById('tertiaryImage')];
