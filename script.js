@@ -58,14 +58,26 @@ const state = {
 let faceLandmarksDetector = null;
 let isOpenCvReady = false;
 
-// OpenCV.js가 로딩되면 호출될 전역 함수
-window.onOpenCvReady = function() {
-    console.log("OpenCV.js is ready.");
-    isOpenCvReady = true;
-    checkAndHideLoadingOverlay();
+// [수정] `onOpenCvReady` 함수를 삭제하고, 아래 `loadOpenCv` 함수로 대체합니다.
+
+// OpenCV를 직접 로드하는 새 함수
+function loadOpenCv() {
+    console.log("Loading OpenCV.js...");
+    const script = document.createElement('script');
+    script.src = 'https://docs.opencv.org/4.9.0/opencv.js';
+    script.async = true;
+    script.onload = () => {
+        console.log("OpenCV.js is ready.");
+        isOpenCvReady = true;
+        checkAndHideLoadingOverlay();
+    };
+    script.onerror = () => {
+        console.error("Failed to load OpenCV.js");
+        alert("OpenCV 라이브러리 로딩에 실패했습니다. 페이지를 새로고침해주세요.");
+    };
+    document.head.appendChild(script);
 }
 
-// AI 모델 로딩 함수
 async function loadFaceDetector() {
     console.log("Loading Face Landmarks Detection model...");
     document.getElementById('loadingOverlay').classList.replace('hidden', 'flex');
@@ -86,7 +98,6 @@ async function loadFaceDetector() {
     }
 }
 
-// **[수정됨]** AI 모델 로딩 완료 후 버튼을 활성화하는 로직을 추가합니다.
 function checkAndHideLoadingOverlay() {
     if (isOpenCvReady && faceLandmarksDetector) {
         document.getElementById('loadingOverlay').classList.replace('flex', 'hidden');
@@ -105,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchPatients(); 
     setupEventListeners();
     loadFaceDetector();
+    loadOpenCv(); // OpenCV 로딩 시작
 });
 
 function setupEventListeners() {
