@@ -13,19 +13,22 @@
                         inter: ['Inter', 'sans-serif'],
                     },
                     colors: {
-                        primary: '#4CAF50', // 녹색 계열 (예: #4CAF50)
-                        secondary: '#FFC107', // 주황 계열
-                        accent: '#2196F3', // 파랑 계열
+                        primary: '#4CAF50',
+                        secondary: '#FFC107',
+                        accent: '#2196F3',
                     }
                 }
             }
         }
     </script>
+    
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-cpu"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+    
     <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady();"></script>
-    <style>
+
     <style>
         /* 기본 스크롤바 숨기기 (선택 사항) */
         ::-webkit-scrollbar {
@@ -35,20 +38,14 @@
             -ms-overflow-style: none;  /* IE and Edge */
             scrollbar-width: none;  /* Firefox */
         }
-
-        /* 선택된 환자 강조 스타일 */
         .patient-list-item.selected {
-            background-color: #e0f2f1; /* 연한 초록색 */
+            background-color: #e0f2f1;
             font-weight: 600;
         }
-
-        /* 선택된 사진 강조 스타일 */
         .photo-list-item.selected {
-            background-color: #e8f5e9; /* 연한 연두색 */
+            background-color: #e8f5e9;
             border: 1px solid #a5d6a7;
         }
-
-        /* 전체 화면 시 뷰어 스타일 (JavaScript에서 토글) */
         .full-screen-viewer {
             position: fixed;
             top: 0;
@@ -56,11 +53,9 @@
             width: 100%;
             height: 100%;
             z-index: 1000;
-            background-color: #1a202c; /* 배경 어둡게 */
-            overflow: hidden; /* 스크롤바 숨기기 */
+            background-color: #1a202c;
+            overflow: hidden;
         }
-
-        /* 이미지 드래그앤드롭 피드백 */
         .image-wrapper.drag-over {
             border: 2px dashed #4CAF50;
             background-color: rgba(76, 175, 80, 0.1);
@@ -69,36 +64,25 @@
             opacity: 0.5;
             border: 2px solid #2196F3;
         }
-
-        /* 이미지 컨테이너 내 드래그 커서 */
         #image-container.cursor-grabbing {
             cursor: grabbing;
             cursor: -webkit-grabbing;
         }
-
-        /* 캔버스 오버레이 스타일 */
         #analysisCanvas {
             position: absolute;
             top: 0;
             left: 0;
-            pointer-events: none; /* 캔버스 클릭 이벤트를 아래 이미지로 통과시킵니다. */
-            z-index: 10; /* 이미지 위에 오도록 설정 */
-            /* 캔버스 자체의 transform은 JS에서 applyTransforms 함수로 제어 */
-            transform-origin: top left; /* 확대/축소 기준점 */
+            pointer-events: none;
+            z-index: 10;
+            transform-origin: top left;
         }
-
-        /* 폰트 사이즈 xxs (Tailwind 기본에 없음, 커스텀 정의) */
         .text-xxs {
-            font-size: 0.65rem; /* 약 10.4px */
-            line-height: 0.8rem; /* 약 12.8px */
+            font-size: 0.65rem;
+            line-height: 0.8rem;
         }
     </style>
 </head>
 <body class="font-inter antialiased flex h-screen overflow-hidden bg-gray-100">
-     <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-60 flex-col justify-center items-center z-[9999] hidden">
-        <div class="text-white text-xl font-bold mb-4">AI 모델을 로딩 중입니다...</div>
-        <div class="text-white text-lg">잠시만 기다려주세요.</div>
-    </div>
     <div class="flex flex-1 overflow-hidden">
         <aside id="patient-panel" class="w-1/5 bg-white p-4 flex flex-col shadow-lg">
             <h1 class="text-2xl font-bold mb-4 text-gray-800">F-ray Viewer</h1>
@@ -172,7 +156,7 @@
                     <p id="viewerPhotoInfo" class="text-sm text-gray-400">사진 정보를 선택해주세요.</p>
                 </div>
                 <div class="flex space-x-2">
-                    <button id="analyzeBtn" class="px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-full text-sm font-medium hover:bg-green-200 transition-colors duration-200 shadow">
+                    <button id="analyzeBtn" class="px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-full text-sm font-medium transition-colors duration-200 shadow opacity-50 cursor-not-allowed" disabled>
                         AI 분석
                     </button>
                     <button id="compareBtn" class="px-3 py-1 bg-gray-700 text-white rounded-full text-sm font-medium hover:bg-gray-600 transition-colors duration-200 shadow">
@@ -277,6 +261,11 @@
                 </button>
             </div>
         </div>
+    </div>
+    
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-60 flex-col justify-center items-center z-[9999] hidden">
+        <div class="text-white text-xl font-bold mb-4">AI 모델을 로딩 중입니다...</div>
+        <div class="text-white text-lg">잠시만 기다려주세요.</div>
     </div>
 
     <script type="module" src="script.js"></script>

@@ -7,7 +7,6 @@ import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://w
 
 
 // 여러분이 알려주신 Firebase 프로젝트 설정 정보입니다.
-// !!! 이 부분을 여러분의 새 프로젝트 설정 정보로 반드시 업데이트해주세요 !!!
 const firebaseConfig = {
    apiKey: "AIzaSyB4GGKFIox_Wl2mXkG5cSkuHdEcsHgfuNU", // 여러분의 실제 API 키로 변경하세요.
   authDomain: "frayviewer-63e13.firebaseapp.com", // 여러분의 실제 Auth Domain으로 변경하세요.
@@ -25,41 +24,41 @@ const storage = getStorage(app);
 const db = getFirestore(app);
 
 // state: 웹사이트의 현재 상태를 저장하는 변수들입니다.
-// 예를 들어, 어떤 환자가 선택되었는지, 확대 레벨은 얼마인지 등을 기억해요.
 const state = {
     selectedPatientId: null,
-    primaryPhotoId: null, // 이 값은 이제 Firestore 문서 ID 또는 Storage URL이 될 수 있습니다.
+    primaryPhotoId: null,
     secondaryPhotoId: null,
     tertiaryPhotoId: null,
-    comparePhotoIds: [], // 비교 뷰에 표시될 사진 ID들의 배열 (순서 중요)
-    currentModeFilter: 'all', // 기존 currentFilter의 이름을 변경하여 용도를 명확히 함
-    currentDateFilter: '', // 촬영 날짜 필터 추가 (YYYY-MM-DD)
-    currentAngleFilter: 'all', // 각도 필터 추가
-    currentProcedureStatusFilter: 'all', // [변경] 시술 상태 필터 추가
-    isAnalysisPanelVisible: false, // 분석 패널이 보이는지 여부
-    isCompareSelectionActive: false, // 사용자가 비교 모드 선택 중 (2장/3장 선택 중)
-    isComparingPhotos: false, // 2장 또는 3장의 사진이 실제로 뷰어에 표시되어 비교 중인 상태 (이 상태에서 드래그앤드롭 가능)
-    compareSelectionStep: 0, // 0: 선택 중 아님, 1: 두 번째 선택, 2: 세 번째 선택
-    compareCount: 0, // 2 또는 3
-    currentZoomLevel: 1.0, // 현재 확대 레벨 (1.0 = 원본 크기)
-    zoomStep: 0.2, // 확대/축소 시 변화량
-    maxZoom: 3.0, // 최대 확대 레벨
-    minZoom: 0.5, // 최소 축소 레벨
-    isDragging: false, // 사진 드래그 중인지 여부 (팬/줌용)
-    startX: 0, // 드래그 시작 시 마우스 X 좌표 (팬/줌용)
-    startY: 0, // 드래그 시작 시 마우스 Y 좌표 (팬/줌용)
-    currentTranslateX: 0, // 현재 X축 이동량 (팬/줌용)
-    currentTranslateY: 0, // 현재 Y축 이동량 (팬/줌용)
-    lastTranslateX: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
-    lastTranslateY: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
-    stagedPhoto: null, // { url: string, mode: string, viewAngle: string, file: File | null, procedureStatus: string } - 환자 미지정 상태의 사진 [변경] procedureStatus 추가
+    comparePhotoIds: [],
+    currentModeFilter: 'all',
+    currentDateFilter: '',
+    currentAngleFilter: 'all',
+    currentProcedureStatusFilter: 'all',
+    isAnalysisPanelVisible: false,
+    isCompareSelectionActive: false,
+    isComparingPhotos: false,
+    compareSelectionStep: 0,
+    compareCount: 0,
+    currentZoomLevel: 1.0,
+    zoomStep: 0.2,
+    maxZoom: 3.0,
+    minZoom: 0.5,
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    currentTranslateX: 0,
+    currentTranslateY: 0,
+    lastTranslateX: 0,
+    lastTranslateY: 0,
+    stagedPhoto: null,
 };
 
 
-let faceLandmarksDetector = null; // 얼굴 랜드마크 모델을 저장할 변수
-let isOpenCvReady = false; // OpenCV.js 로딩 완료 여부
+// AI 분석 관련 전역 변수
+let faceLandmarksDetector = null;
+let isOpenCvReady = false;
 
-// OpenCV.js가 로딩되면 호출될 전역 함수
+// OpenCV.js가 로딩되면 호출될 전역 함수 (수정된 부분)
 window.onOpenCvReady = function() {
     console.log("OpenCV.js is ready.");
     isOpenCvReady = true;
@@ -69,45 +68,55 @@ window.onOpenCvReady = function() {
 // AI 모델 로딩 함수
 async function loadFaceDetector() {
     console.log("Loading Face Landmarks Detection model...");
-    // 로딩 오버레이 표시
-    document.getElementById('loadingOverlay').classList.remove('flex');
-    document.getElementById('loadingOverlay').classList.add('flex');
+    document.getElementById('loadingOverlay').classList.replace('hidden', 'flex');
     
-    // TensorFlow.js 백엔드 설정 (CPU 사용)
-    await tf.setBackend('cpu');
-    
-    // 모델 로드
-    const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-    const detectorConfig = {
-      runtime: 'tfjs',
-    };
-    faceLandmarksDetector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-    
-    console.log("Face Landmarks Detection model loaded.");
-    checkAndHideLoadingOverlay();
+    try {
+        await tf.setBackend('cpu');
+        const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+        const detectorConfig = {
+          runtime: 'tfjs',
+        };
+        faceLandmarksDetector = await faceLandmarksDetection.createDetector(model, detectorConfig);
+        
+        console.log("Face Landmarks Detection model loaded.");
+    } catch (error) {
+        console.error("Failed to load Face Detector:", error);
+        alert("AI 모델 로딩에 실패했습니다. 페이지를 새로고침하거나 인터넷 연결을 확인해주세요.");
+    } finally {
+        checkAndHideLoadingOverlay();
+    }
 }
 
-// 모든 모델 로딩이 완료되었는지 확인하고 오버레이를 숨기는 함수
+// 모든 모델 로딩이 완료되었는지 확인하고 오버레이 및 버튼 상태 변경
 function checkAndHideLoadingOverlay() {
     if (isOpenCvReady && faceLandmarksDetector) {
         document.getElementById('loadingOverlay').classList.replace('flex', 'hidden');
         console.log("All AI models are ready.");
+
+        // 'AI 분석' 버튼 활성화
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        analyzeBtn.disabled = false;
+        analyzeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        analyzeBtn.classList.add('hover:bg-green-200');
+        console.log("AI Analyze button enabled.");
     }
 }
 
+// 페이지 로드 시 실행
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOMContentLoaded 이벤트 발생. 스크립트 실행 시작.'); // 디버깅 로그 추가
+    console.log('DOMContentLoaded 이벤트 발생. 스크립트 실행 시작.');
     fetchPatients(); 
-    setupEventListeners(); // 버튼 클릭, 마우스 움직임 등의 이벤트를 설정합니다.
-    loadFaceDetector(); // 페이지 로드 시 AI 모델 미리 로딩
+    setupEventListeners();
+    loadFaceDetector();
 });
 
 function setupEventListeners() {
-    console.log('setupEventListeners 함수 호출됨.'); // 디버깅 로그 추가
+    // ... (이하 모든 함수는 이전과 동일)
+    console.log('setupEventListeners 함수 호출됨.');
     const patientSearch = document.getElementById('patientSearch');
     patientSearch.addEventListener('input', (e) => {
-        const searchTerm = e.target.value.toLowerCase(); // 검색창에 입력된 텍스트를 가져와 소문자로 바꿉니다.
-        fetchPatients(searchTerm); // 입력된 텍스트로 환자 검색
+        const searchTerm = e.target.value.toLowerCase();
+        fetchPatients(searchTerm);
     });
 
     const photoModeFilterBtns = document.querySelectorAll('.photo-mode-filter-btn');
@@ -206,8 +215,6 @@ function setupEventListeners() {
     });
 }
 
-// ========================= [코드 수정] =========================
-// `toggleAnalysisPanel` 함수에 촬영 각도(viewAngle) 확인 로직 추가
 async function toggleAnalysisPanel() {
     state.isAnalysisPanelVisible = !state.isAnalysisPanelVisible;
     const panel = document.getElementById('analysisPanel');
@@ -221,15 +228,12 @@ async function toggleAnalysisPanel() {
         if (state.primaryPhotoId) {
             const photoData = await getPhotoById(state.primaryPhotoId);
 
-            // 앵글 확인 로직 추가
             if (photoData && photoData.viewAngle !== 'C0') {
                 document.getElementById('analysisContent').innerHTML = `<p class='text-yellow-400 font-semibold'>AI 분석은 정면(C0) 사진에서만 가능합니다.</p><p class='text-gray-400 mt-2'>현재 사진 각도: ${photoData.viewAngle}</p>`;
-                // 캔버스는 숨김
                 analysisCanvas.classList.add('hidden');
-                return; // 분석 중단
+                return;
             }
             
-            // C0 사진이 맞으면 분석 진행
             analysisCanvas.classList.remove('hidden');
             document.getElementById('analysisContent').innerHTML = "<p class='text-gray-400'>AI 분석을 수행 중입니다...</p>";
             
@@ -261,27 +265,19 @@ async function toggleAnalysisPanel() {
         analysisCanvas.classList.add('hidden');
     }
 }
-// =============================================================
 
-// ... 나머지 모든 함수는 이전과 동일하게 유지됩니다 ...
-// (getPhotoById, fetchPatients, renderPatientList, addNewPatient, selectPatient, fetchPhotos, renderPhotoList, selectPhoto, renderAnalysis, clearAnalysis, handleCompareButtonClick, startCompareSelection, updateComparisonDisplay, resetComparisonView, toggleFullScreen, applyTransforms, zoomImage, resetZoomAndPan, handleMouseWheelZoom, handleMouseDown, handleMouseMove, handleMouseUp, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd, mapStatusToKorean, handleLocalFileSelect, showWebImageSelectModal, selectWebImageFromStorage, displayImageAndSave, displayImageWithoutSaving, resetViewerToPlaceholder, deletePhoto, performRealAIAnalysis, analyzeWrinkles, analyzeSpots, analyzeSagging)
-
-
-// Helper function to get photo data by ID (can be optimized with a cache if needed)
 async function getPhotoById(photoId) {
     if (!photoId) return null;
     const photoDoc = await getDoc(doc(db, 'photos', photoId));
     return photoDoc.exists() ? { id: photoDoc.id, ...photoDoc.data() } : null;
 }
 
-
-// fetchPatients: Firestore에서 환자 목록을 불러와 화면에 그립니다.
 async function fetchPatients(searchTerm = '') {
     const patientListEl = document.getElementById('patientList');
     patientListEl.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm">환자 목록을 불러오는 중...</p>';
     try {
-        const patientsCol = collection(db, 'patients'); // 'patients' 컬렉션 참조
-        const patientSnapshot = await getDocs(patientsCol); // 모든 환자 문서 가져오기
+        const patientsCol = collection(db, 'patients');
+        const patientSnapshot = await getDocs(patientsCol);
         const patients = patientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
         const filteredPatients = patients.filter(patient => 
@@ -300,7 +296,6 @@ async function fetchPatients(searchTerm = '') {
     }
 }
 
-// renderPatientList: 환자 목록을 화면에 그립니다.
 function renderPatientList(patients) {
     const patientListEl = document.getElementById('patientList');
     patientListEl.innerHTML = '';
@@ -322,7 +317,6 @@ function renderPatientList(patients) {
     });
 }
 
-// addNewPatient: 새 환자를 Firestore에 추가합니다.
 async function addNewPatient() {
     const name = prompt("새 환자의 이름을 입력해주세요:");
     if (!name) return;
@@ -350,7 +344,6 @@ async function addNewPatient() {
     }
 }
 
-// selectPatient: 환자를 선택했을 때 실행되는 함수입니다.
 async function selectPatient(patientId) {
     if (state.stagedPhoto && state.selectedPatientId === null) {
         try {
@@ -429,7 +422,6 @@ async function selectPatient(patientId) {
     fetchPhotos(patientId);
 }
 
-// fetchPhotos: Firestore에서 특정 환자의 사진 목록을 불러와 화면에 그립니다.
 async function fetchPhotos(patientId) {
     if (!patientId) {
         renderPhotoList([]);
@@ -475,7 +467,6 @@ async function fetchPhotos(patientId) {
     }
 }
 
-// renderPhotoList: 선택된 환자의 사진 목록을 화면에 그립니다.
 function renderPhotoList(photos) {
     const photoListEl = document.getElementById('photoList');
     photoListEl.innerHTML = '';
