@@ -55,39 +55,53 @@ const state = {
     stagedPhoto: null, // { url: string, mode: string, viewAngle: string, file: File | null, procedureStatus: string } - 환자 미지정 상태의 사진 [변경] procedureStatus 추가
 };
 
-// ========================= [코드 추가] =========================
-/**
- * 파일명에서 추출한 영어 상태를 한글로 변환하는 함수
- * @param {string} status - 파일명에서 추출한 영어 시술 상태 (예: 'Before', '1W')
- * @returns {string} - 변환된 한글 시술 상태 (예: '시술 전', '1주 후')
- */
-function mapStatusToKorean(status) {
-    const statusMap = {
-        'Before': '시술 전',
-        'After': '시술 후',
-        '1W': '1주 후',
-        '1M': '1개월 후',
-        '3M': '3개월 후',
-        '6M': '6개월 후',
-        '1Y': '1년 후',
-        'None': '기타/미지정'
-    };
-    // 매핑되는 값이 있으면 그 값을, 없으면 '기타/미지정'을 반환
-    return statusMap[status] || '기타/미지정';
-}
-// =============================================================
 
-// DOMContentLoaded: 웹 페이지의 모든 HTML이 로드되면 실행되는 부분입니다.
-// 이 안에서 모든 초기 설정을 시작합니다.
+let faceLandmarksDetector = null; // 얼굴 랜드마크 모델을 저장할 변수
+let isOpenCvReady = false; // OpenCV.js 로딩 완료 여부
+
+// OpenCV.js가 로딩되면 호출될 전역 함수
+window.onOpenCvReady = function() {
+    console.log("OpenCV.js is ready.");
+    isOpenCvReady = true;
+    checkAndHideLoadingOverlay();
+}
+
+// AI 모델 로딩 함수
+async function loadFaceDetector() {
+    console.log("Loading Face Landmarks Detection model...");
+    // 로딩 오버레이 표시
+    document.getElementById('loadingOverlay').classList.remove('flex');
+    document.getElementById('loadingOverlay').classList.add('flex');
+    
+    // TensorFlow.js 백엔드 설정 (CPU 사용)
+    await tf.setBackend('cpu');
+    
+    // 모델 로드
+    const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+    const detectorConfig = {
+      runtime: 'tfjs',
+    };
+    faceLandmarksDetector = await faceLandmarksDetection.createDetector(model, detectorConfig);
+    
+    console.log("Face Landmarks Detection model loaded.");
+    checkAndHideLoadingOverlay();
+}
+
+// 모든 모델 로딩이 완료되었는지 확인하고 오버레이를 숨기는 함수
+function checkAndHideLoadingOverlay() {
+    if (isOpenCvReady && faceLandmarksDetector) {
+        document.getElementById('loadingOverlay').classList.replace('flex', 'hidden');
+        console.log("All AI models are ready.");
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOMContentLoaded 이벤트 발생. 스크립트 실행 시작.'); // 디버깅 로그 추가
-    // 이제 MOCK_DB 대신 Firestore에서 환자 목록을 불러옵니다.
-    console.log('fetchPatients 함수 호출 시작 (DOMContentLoaded).'); // 디버깅 로그 추가
     fetchPatients(); 
     setupEventListeners(); // 버튼 클릭, 마우스 움직임 등의 이벤트를 설정합니다.
+    loadFaceDetector(); // 페이지 로드 시 AI 모델 미리 로딩
 });
 
-// setupEventListeners: 웹사이트의 각종 버튼과 마우스 이벤트들을 연결합니다.
 function setupEventListeners() {
     console.log('setupEventListeners 함수 호출됨.'); // 디버깅 로그 추가
     const patientSearch = document.getElementById('patientSearch');
@@ -96,13 +110,11 @@ function setupEventListeners() {
         fetchPatients(searchTerm); // 입력된 텍스트로 환자 검색
     });
 
-    // 촬영 모드 필터 버튼 (mode-filter-btn으로 클래스명 변경)
     const photoModeFilterBtns = document.querySelectorAll('.photo-mode-filter-btn');
     photoModeFilterBtns.forEach(btn => {
         btn.addEventListener('click', () => {
-            state.currentModeFilter = btn.dataset.filter; // 클릭된 버튼의 필터 값을 상태에 저장합니다.
+            state.currentModeFilter = btn.dataset.filter;
             
-            // 모든 모드 필터 버튼의 색상을 초기화하고, 클릭된 버튼만 활성화 색상으로 바꿉니다.
             photoModeFilterBtns.forEach(b => {
                 if (b.dataset.filter === state.currentModeFilter) {
                     b.classList.replace('bg-gray-200', 'bg-[#4CAF50]');
@@ -112,41 +124,35 @@ function setupEventListeners() {
                     b.classList.remove('text-white');
                 }
             });
-            fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
+            fetchPhotos(state.selectedPatientId);
         });
     });
 
-    // 촬영 날짜 필터 (새로 추가)
     document.getElementById('photoDateFilter').addEventListener('change', (e) => {
-        state.currentDateFilter = e.target.value; //InstrumentedTest-MM-DD 형식으로 저장
-        fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
+        state.currentDateFilter = e.target.value;
+        fetchPhotos(state.selectedPatientId);
     });
 
-    // 각도 필터 (새로 추가)
     document.getElementById('photoAngleFilter').addEventListener('change', (e) => {
-        state.currentAngleFilter = e.target.value; // 선택된 각도 값 저장
-        fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
+        state.currentAngleFilter = e.target.value;
+        fetchPhotos(state.selectedPatientId);
     });
 
-    // [변경] 시술 상태 필터 (새로 추가)
     const photoProcedureStatusFilter = document.getElementById('photoProcedureStatusFilter');
     if (photoProcedureStatusFilter) {
         photoProcedureStatusFilter.addEventListener('change', (e) => {
-            state.currentProcedureStatusFilter = e.target.value; // 선택된 시술 상태 값 저장
-            fetchPhotos(state.selectedPatientId); // 필터링된 사진 목록을 다시 불러옵니다.
+            state.currentProcedureStatusFilter = e.target.value;
+            fetchPhotos(state.selectedPatientId);
         });
     }
 
-
-    // 주요 기능 버튼에 클릭 이벤트를 연결합니다.
-    document.getElementById('analyzeBtn').addEventListener('click', toggleAnalysisPanel); // AI 분석 패널 토글
-    document.getElementById('compareBtn').addEventListener('click', handleCompareButtonClick); // 사진 비교 모드 시작/취소
-    document.getElementById('fullScreenBtn').addEventListener('click', toggleFullScreen); // 전체 화면 토글
-    document.getElementById('zoomInBtn').addEventListener('click', () => zoomImage(state.zoomStep)); // 확대 버튼
-    document.getElementById('zoomOutBtn').addEventListener('click', () => zoomImage(-state.zoomStep)); // 축소 버튼
-    document.getElementById('resetViewBtn').addEventListener('click', resetZoomAndPan); // 초기화 버튼
+    document.getElementById('analyzeBtn').addEventListener('click', toggleAnalysisPanel);
+    document.getElementById('compareBtn').addEventListener('click', handleCompareButtonClick);
+    document.getElementById('fullScreenBtn').addEventListener('click', toggleFullScreen);
+    document.getElementById('zoomInBtn').addEventListener('click', () => zoomImage(state.zoomStep));
+    document.getElementById('zoomOutBtn').addEventListener('click', () => zoomImage(-state.zoomStep));
+    document.getElementById('resetViewBtn').addEventListener('click', resetZoomAndPan);
     
-    // [이동] 선택 사진 삭제 버튼
     document.getElementById('deletePhotoBtn').addEventListener('click', () => { 
         if (state.primaryPhotoId) {
             deletePhoto(state.primaryPhotoId);
@@ -155,131 +161,155 @@ function setupEventListeners() {
         }
     });
 
-    // 비교 사진 선택 팝업의 버튼에 이벤트를 연결합니다.
-    document.getElementById('choose2PhotosBtn').addEventListener('click', () => startCompareSelection(2)); // 2장 비교 선택
-    document.getElementById('choose3PhotosBtn').addEventListener('click', () => startCompareSelection(3)); // 3장 비교 선택
+    document.getElementById('choose2PhotosBtn').addEventListener('click', () => startCompareSelection(2));
+    document.getElementById('choose3PhotosBtn').addEventListener('click', () => startCompareSelection(3));
 
-    // 이미지 컨테이너에 마우스 휠 및 드래그 이벤트를 연결합니다.
     const imageContainer = document.getElementById('image-container');
-    imageContainer.addEventListener('wheel', handleMouseWheelZoom); // 마우스 휠로 확대/축소
-    imageContainer.addEventListener('mousedown', handleMouseDown); // 마우스 클릭(누름) 시 드래그 시작
+    imageContainer.addEventListener('wheel', handleMouseWheelZoom);
+    imageContainer.addEventListener('mousedown', handleMouseDown);
 
-    // [통합] 사진 불러오기 버튼 이벤트 리스너 추가
     document.getElementById('importPhotoBtn').addEventListener('click', () => {
-        console.log("사진 불러오기 버튼 클릭됨. (importPhotoBtn)");
-        document.getElementById('importChoiceOverlay').classList.remove('hidden'); // 통합 선택 모달 표시
+        document.getElementById('importChoiceOverlay').classList.remove('hidden');
     });
-    // [추가] 통합 불러오기 모달 내 PC에서 불러오기 버튼
     document.getElementById('importFromLocalBtn').addEventListener('click', () => {
-        document.getElementById('importChoiceOverlay').classList.add('hidden'); // 모달 닫기
-        document.getElementById('localFileInput').click(); // 숨겨진 파일 입력창 클릭 이벤트 발생
+        document.getElementById('importChoiceOverlay').classList.add('hidden');
+        document.getElementById('localFileInput').click();
     });
-    // [추가] 통합 불러오기 모달 내 웹에서 불러오기 버튼
     document.getElementById('importFromWebBtn').addEventListener('click', () => {
-        document.getElementById('importChoiceOverlay').classList.add('hidden'); // 모달 닫기
-        showWebImageSelectModal(); // 웹 이미지 선택 모달 표시
+        document.getElementById('importChoiceOverlay').classList.add('hidden');
+        showWebImageSelectModal();
     });
-    // [추가] 통합 불러오기 모달 닫기 버튼
     document.getElementById('closeImportChoiceModal').addEventListener('click', () => {
-        document.getElementById('importChoiceOverlay').classList.add('hidden'); // 모달 닫기
+        document.getElementById('importChoiceOverlay').classList.add('hidden');
     });
 
-    // 로컬 파일 입력창 이벤트는 기존과 동일하게 유지
     document.getElementById('localFileInput').addEventListener('change', (event) => {
-        console.log("localFileInput change 이벤트 발생.");
         handleLocalFileSelect(event);
     });
     
-    // 웹 이미지 선택 모달 닫기 버튼 이벤트 리스너는 기존과 동일하게 유지
     document.getElementById('closeWebImageSelectModal').addEventListener('click', () => {
-        console.log("웹 이미지 선택 모달 닫기 버튼 클릭됨.");
         document.getElementById('webImageSelectOverlay').classList.add('hidden');
     });
 
-    // '새 환자 추가' 버튼 이벤트 리스너 추가
     document.getElementById('addPatientBtn').addEventListener('click', () => {
-        console.log("새 환자 추가 버튼 클릭됨. (addPatientBtn)");
         addNewPatient();
     });
 
-    // 드래그 앤 드롭 이벤트 리스너 추가 (모든 이미지 래퍼에 적용)
-    // 중요: HTML 파일의 mainImageWrapper, compareImageWrapper, tertiaryImageWrapper div에
-    //      'image-wrapper' 클래스를 추가해야 이 리스너들이 정상 작동합니다.
     const imageWrappers = document.querySelectorAll('#mainImageWrapper, #compareImageWrapper, #tertiaryImageWrapper');
     imageWrappers.forEach(wrapper => {
-        wrapper.draggable = true; // 드래그 가능하도록 설정
+        wrapper.draggable = true;
         wrapper.addEventListener('dragstart', handleDragStart);
         wrapper.addEventListener('dragover', handleDragOver);
         wrapper.addEventListener('dragleave', handleDragLeave);
         wrapper.addEventListener('drop', handleDrop);
-        wrapper.addEventListener('dragend', handleDragEnd); // 드래그 종료 시 호출
+        wrapper.addEventListener('dragend', handleDragEnd);
     });
 }
 
+// ========================= [코드 수정] =========================
+// `toggleAnalysisPanel` 함수에 촬영 각도(viewAngle) 확인 로직 추가
+async function toggleAnalysisPanel() {
+    state.isAnalysisPanelVisible = !state.isAnalysisPanelVisible;
+    const panel = document.getElementById('analysisPanel');
+    const btn = document.getElementById('analyzeBtn');
+    const analysisCanvas = document.getElementById('analysisCanvas');
+
+    if (state.isAnalysisPanelVisible) {
+        panel.classList.remove('hidden');
+        btn.classList.add('bg-[#4CAF50]', 'text-white');
+        
+        if (state.primaryPhotoId) {
+            const photoData = await getPhotoById(state.primaryPhotoId);
+
+            // 앵글 확인 로직 추가
+            if (photoData && photoData.viewAngle !== 'C0') {
+                document.getElementById('analysisContent').innerHTML = `<p class='text-yellow-400 font-semibold'>AI 분석은 정면(C0) 사진에서만 가능합니다.</p><p class='text-gray-400 mt-2'>현재 사진 각도: ${photoData.viewAngle}</p>`;
+                // 캔버스는 숨김
+                analysisCanvas.classList.add('hidden');
+                return; // 분석 중단
+            }
+            
+            // C0 사진이 맞으면 분석 진행
+            analysisCanvas.classList.remove('hidden');
+            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-400'>AI 분석을 수행 중입니다...</p>";
+            
+            try {
+                if (photoData) {
+                    const analysisResult = await performRealAIAnalysis(photoData);
+                    photoData.ai_analysis = analysisResult;
+                    renderAnalysis(photoData);
+                } else {
+                     clearAnalysis();
+                    document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>선택된 사진 정보를 찾을 수 없습니다.</p>";
+                }
+            } catch (error) {
+                console.error("AI 분석 중 오류 발생:", error);
+                clearAnalysis();
+                document.getElementById('analysisContent').innerHTML = "<p class='text-red-500'>AI 분석에 실패했습니다. " + error.message + "</p>";
+            }
+
+        } else {
+            clearAnalysis();
+            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>AI 분석 결과를 보려면 먼저 사진을 선택해주세요.</p>";
+            analysisCanvas.classList.add('hidden');
+        }
+    } else {
+        panel.classList.add('hidden');
+        btn.classList.remove('bg-[#4CAF50]', 'text-white'); 
+        btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
+        clearAnalysis();
+        analysisCanvas.classList.add('hidden');
+    }
+}
+// =============================================================
+
+// ... 나머지 모든 함수는 이전과 동일하게 유지됩니다 ...
+// (getPhotoById, fetchPatients, renderPatientList, addNewPatient, selectPatient, fetchPhotos, renderPhotoList, selectPhoto, renderAnalysis, clearAnalysis, handleCompareButtonClick, startCompareSelection, updateComparisonDisplay, resetComparisonView, toggleFullScreen, applyTransforms, zoomImage, resetZoomAndPan, handleMouseWheelZoom, handleMouseDown, handleMouseMove, handleMouseUp, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd, mapStatusToKorean, handleLocalFileSelect, showWebImageSelectModal, selectWebImageFromStorage, displayImageAndSave, displayImageWithoutSaving, resetViewerToPlaceholder, deletePhoto, performRealAIAnalysis, analyzeWrinkles, analyzeSpots, analyzeSagging)
+
+
 // Helper function to get photo data by ID (can be optimized with a cache if needed)
 async function getPhotoById(photoId) {
-    console.log('getPhotoById 호출됨. photoId:', photoId); // 디버깅 로그 추가
     if (!photoId) return null;
     const photoDoc = await getDoc(doc(db, 'photos', photoId));
-    const photoData = photoDoc.exists() ? { id: photoDoc.id, ...photoDoc.data() } : null;
-    console.log('getPhotoById 결과:', photoData); // 디버깅 로그 추가
-    return photoData;
+    return photoDoc.exists() ? { id: photoDoc.id, ...photoDoc.data() } : null;
 }
 
 
 // fetchPatients: Firestore에서 환자 목록을 불러와 화면에 그립니다.
 async function fetchPatients(searchTerm = '') {
-    console.log('fetchPatients 호출됨. searchTerm:', searchTerm); // Debug log
     const patientListEl = document.getElementById('patientList');
-    // [변경] 로딩 메시지 폰트 사이즈 및 간격 조정
     patientListEl.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm">환자 목록을 불러오는 중...</p>';
     try {
         const patientsCol = collection(db, 'patients'); // 'patients' 컬렉션 참조
         const patientSnapshot = await getDocs(patientsCol); // 모든 환자 문서 가져오기
         const patients = patientSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        if (patientSnapshot.empty) {
-            console.log('Firestore에 환자 문서가 없습니다.'); // Debug log
-        } else {
-            console.log('fetchPatients: 불러온 환자 수:', patients.length); // Debug log
-        }
-
-        // 검색어 필터링 (클라이언트 측에서, Firebase 쿼리로도 가능)
         const filteredPatients = patients.filter(patient => 
             patient.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
             (patient.chartId && patient.chartId.toLowerCase().includes(searchTerm.toLowerCase()))
         );
 
-        renderPatientList(filteredPatients); // 필터링된 환자 목록을 화면에 그립니다.
+        renderPatientList(filteredPatients);
         if (filteredPatients.length === 0) {
-            // [변경] 메시지 폰트 사이즈 및 간격 조정
-            patientListEl.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm">환자가 없습니다. "새 환자 추가" 버튼으로 추가해보세요.</p>';
+            patientListEl.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm">환자가 없습니다.</p>';
         }
     }
     catch (error) {
         console.error("환자 목록을 불러오는 중 오류 발생:", error);
-        // [변경] 에러 메시지 폰트 사이즈 및 간격 조정
         patientListEl.innerHTML = '<p class="text-center text-red-500 py-2 text-sm">환자 목록을 불러오지 못했습니다.</p>';
     }
 }
 
 // renderPatientList: 환자 목록을 화면에 그립니다.
-// 이제 실제 환자 데이터를 인자로 받아 화면에 렌더링합니다.
 function renderPatientList(patients) {
-    console.log('renderPatientList 호출됨. 렌더링할 환자 수:', patients.length); // Debug log
     const patientListEl = document.getElementById('patientList');
-    patientListEl.innerHTML = ''; // 기존 목록을 비웁니다.
+    patientListEl.innerHTML = '';
     
     patients.forEach(patient => {
-        const li = document.createElement('li'); // 새로운 리스트 아이템(li)을 만듭니다.
-        // Tailwind CSS 클래스를 적용하여 스타일을 입힙니다.
-        // [변경] p-2를 py-1 px-2로, text-sm 추가
+        const li = document.createElement('li');
         li.className = 'patient-list-item py-1 px-2 cursor-pointer border-b border-gray-200 flex justify-between items-center text-sm';
-        // 현재 선택된 환자라면 'selected' 클래스를 추가하여 강조합니다.
         if(patient.id === state.selectedPatientId) li.classList.add('selected');
 
-        // 환자 정보를 li 안에 넣어줍니다.
-        // [변경] 폰트 사이즈 조정
         li.innerHTML = `
             <div>
                 <p class="font-semibold text-sm">${patient.name}</p>
@@ -287,26 +317,21 @@ function renderPatientList(patients) {
             </div>
             <span class="text-xs text-gray-400">></span>
         `;
-        // li를 클릭하면 selectPatient 함수가 호출되도록 이벤트를 연결합니다.
-        li.addEventListener('click', () => {
-            console.log('환자 목록 아이템 클릭됨. Patient ID:', patient.id); // 디버깅 로그 추가
-            selectPatient(patient.id);
-        });
-        patientListEl.appendChild(li); // 완성된 li를 환자 목록에 추가합니다.
+        li.addEventListener('click', () => selectPatient(patient.id));
+        patientListEl.appendChild(li);
     });
 }
 
 // addNewPatient: 새 환자를 Firestore에 추가합니다.
 async function addNewPatient() {
-    console.log("addNewPatient 함수 실행됨."); // 디버깅 로그 추가
     const name = prompt("새 환자의 이름을 입력해주세요:");
-    if (!name) { console.log("새 환자 추가 취소됨 (이름 없음)."); return; }
+    if (!name) return;
     const birth = prompt("새 환자의 생년월일을 입력해주세요 (예: 1990-01-01):");
-    if (!birth) { console.log("새 환자 추가 취소됨 (생년월일 없음)."); return; }
+    if (!birth) return;
     const gender = prompt("새 환자의 성별을 입력해주세요 (예: 남/여):");
-    if (!gender) { console.log("새 환자 추가 취소됨 (성별 없음)."); return; }
+    if (!gender) return;
     const chartId = prompt("새 환자의 차트 ID를 입력해주세요 (예: C-20240001):");
-    if (!chartId) { console.log("새 환자 추가 취소됨 (차트 ID 없음)."); return; }
+    if (!chartId) return;
 
     try {
         const patientsCol = collection(db, 'patients');
@@ -315,32 +340,27 @@ async function addNewPatient() {
             birth,
             gender,
             chartId,
-            createdAt: new Date() // 생성 시간 기록
+            createdAt: new Date()
         });
         alert(`${name} 환자가 성공적으로 추가되었습니다!`);
-        fetchPatients(); // 환자 목록을 새로고침합니다.
+        fetchPatients();
     } catch (error) {
         console.error("환자 추가 중 오류 발생:", error);
-        alert("환자 추가에 실패했습니다. 오류: " + error.message);
+        alert("환자 추가에 실패했습니다: " + error.message);
     }
 }
 
 // selectPatient: 환자를 선택했을 때 실행되는 함수입니다.
 async function selectPatient(patientId) {
-    console.log('selectPatient 호출됨. patientId:', patientId); // 디버깅 로그 추가
-    // 만약 현재 stagedPhoto가 있고, 이전에 선택된 환자가 없었다면
     if (state.stagedPhoto && state.selectedPatientId === null) {
         try {
-            // stagedPhoto를 현재 선택된 환자에게 연결하여 Firestore에 저장합니다.
-            const { url, mode, viewAngle, file, ai_analysis, date, procedureStatus } = state.stagedPhoto; // [변경] procedureStatus 추가
+            const { url, mode, viewAngle, file, ai_analysis, date, procedureStatus } = state.stagedPhoto;
             let imageUrlToDisplay = url;
 
-            // 로컬 파일의 경우 Storage에 업로드
             if (file) {
                 const storageRef = ref(storage, `photos/${patientId}/${file.name}_${Date.now()}`);
                 const snapshot = await uploadBytes(storageRef, file);
                 imageUrlToDisplay = await getDownloadURL(snapshot.ref);
-                console.log('Staged file uploaded to Firebase Storage:', imageUrlToDisplay);
             }
 
             const newPhotoData = {
@@ -348,14 +368,14 @@ async function selectPatient(patientId) {
                 url: imageUrlToDisplay,
                 mode: mode,
                 viewAngle: viewAngle,
-                date: date, // staged photo에서 가져온 date
+                date: date,
                 uploadedAt: new Date(),
-                ai_analysis: ai_analysis, // staged photo에서 가져온 AI 분석 데이터
-                procedureStatus: procedureStatus // [변경] staged photo에서 가져온 시술 상태
+                ai_analysis: ai_analysis,
+                procedureStatus: procedureStatus
             };
             const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
-            state.primaryPhotoId = docRef.id; // 새로 저장된 사진의 ID를 primaryPhotoId로 설정
-            state.stagedPhoto = null; // stagedPhoto 초기화
+            state.primaryPhotoId = docRef.id;
+            state.stagedPhoto = null;
             alert('사진이 선택된 환자에게 성공적으로 연결되었습니다.');
         } catch (error) {
             console.error("Staged 사진 저장 중 오류 발생:", error);
@@ -363,18 +383,15 @@ async function selectPatient(patientId) {
         }
     }
 
-    // 환자 선택 상태 업데이트 및 UI 처리
     state.selectedPatientId = patientId;
     
-    // 새 환자 선택 시 필터 및 UI 초기화
     state.currentModeFilter = 'all';
     state.currentDateFilter = '';
     state.currentAngleFilter = 'all';
-    state.currentProcedureStatusFilter = 'all'; // [변경] 시술 상태 필터 초기화
+    state.currentProcedureStatusFilter = 'all';
 
     document.getElementById('photoDateFilter').value = '';
     document.getElementById('photoAngleFilter').value = 'all';
-    // [변경] 시술 상태 필터도 초기화
     const photoProcedureStatusFilter = document.getElementById('photoProcedureStatusFilter');
     if (photoProcedureStatusFilter) {
         photoProcedureStatusFilter.value = 'all';
@@ -391,7 +408,7 @@ async function selectPatient(patientId) {
         }
     });
 
-    fetchPatients(); // 환자 목록을 다시 그려서 선택된 환자를 강조 표시
+    fetchPatients();
 
     document.getElementById('photoListSection').classList.remove('hidden');
     const patientDoc = await getDoc(doc(db, 'patients', patientId));
@@ -409,40 +426,31 @@ async function selectPatient(patientId) {
         document.getElementById('photoListHeader').innerText = `선택된 환자의 사진 목록`;
     }
     
-    console.log('fetchPhotos 함수 호출 시작 (selectPatient).'); // 디버깅 로그 추가
-    fetchPhotos(patientId); // 필터링된 사진 목록을 다시 불러옵니다.
-    console.log('selectPatient 함수 종료.'); // 디버깅 로그 추가
+    fetchPhotos(patientId);
 }
 
 // fetchPhotos: Firestore에서 특정 환자의 사진 목록을 불러와 화면에 그립니다.
 async function fetchPhotos(patientId) {
-    console.log('fetchPhotos 호출됨. patientId:', patientId); // Debug log
     if (!patientId) {
-        renderPhotoList([]); // 환자 ID가 없으면 빈 목록을 그립니다.
-        console.log('fetchPhotos: patientId가 유효하지 않아 빈 사진 목록을 렌더링합니다.'); // Debug log
+        renderPhotoList([]);
         return;
     }
     const photoListEl = document.getElementById('photoList');
-    // [변경] 로딩 메시지 폰트 사이즈 및 간격 조정
     photoListEl.innerHTML = '<p class="col-span-2 text-center text-gray-500 py-2 text-xs">사진 목록을 불러오는 중...</p>'; 
 
     try {
         const photosCol = collection(db, 'photos');
         let q = query(photosCol, where('patientId', '==', patientId));
 
-        // 촬영 모드 필터 적용
         if (state.currentModeFilter !== 'all') {
             q = query(q, where('mode', '==', state.currentModeFilter));
         }
-        // 촬영 날짜 필터 적용
         if (state.currentDateFilter) {
             q = query(q, where('date', '==', state.currentDateFilter));
         }
-        // 각도 필터 적용
         if (state.currentAngleFilter !== 'all') {
             q = query(q, where('viewAngle', '==', state.currentAngleFilter));
         }
-        // [변경] 시술 상태 필터 적용
         if (state.currentProcedureStatusFilter !== 'all') {
             q = query(q, where('procedureStatus', '==', state.currentProcedureStatusFilter));
         }
@@ -450,20 +458,13 @@ async function fetchPhotos(patientId) {
         const photoSnapshot = await getDocs(q);
         let photos = photoSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        if (photoSnapshot.empty) {
-            console.log(`fetchPhotos: 환자 ${patientId}에 대한 사진 문서가 없습니다.`); // Debug log
-        } else {
-            console.log(`fetchPhotos: 불러온 사진 수 (${patientId}):`, photos.length); // Debug log
-        }
-
-        // 최신순으로 정렬 (uploadedAt을 기준으로)
         photos.sort((a, b) => {
             const dateA = a.uploadedAt?.toDate ? a.uploadedAt.toDate().getTime() : 0;
             const dateB = b.uploadedAt?.toDate ? b.uploadedAt.toDate().getTime() : 0;
             return dateB - dateA;
         });
 
-        renderPhotoList(photos); // 불러온 사진 목록을 화면에 그립니다.
+        renderPhotoList(photos);
         if (photos.length === 0) {
             photoListEl.innerHTML = '<p class="col-span-2 text-center text-gray-500 py-2 text-xs">이 환자의 사진이 없습니다.</p>';
         }
@@ -476,9 +477,8 @@ async function fetchPhotos(patientId) {
 
 // renderPhotoList: 선택된 환자의 사진 목록을 화면에 그립니다.
 function renderPhotoList(photos) {
-    console.log('renderPhotoList 호출됨. 렌더링할 사진 수:', photos.length); // Debug log
     const photoListEl = document.getElementById('photoList');
-    photoListEl.innerHTML = ''; // 기존 사진 목록을 비웁니다.
+    photoListEl.innerHTML = '';
     
     photos.forEach(photo => {
         const li = document.createElement('li');
@@ -489,8 +489,7 @@ function renderPhotoList(photos) {
         img.alt = photo.mode;
         img.className = 'w-12 h-12 object-cover rounded-md mr-1';
         img.onerror = () => {
-            console.error(`Error loading thumbnail image: ${photo.url}`);
-            img.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'64\' height=\'64\' viewBox=\'0 0 64 64\'%3E%3Crect width=\'64\' height=\'64\' fill=\'%23f8d7da\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' font-family=\'sans-serif\' font-size=\'8\' fill=\'%23721c24\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3EError%3C/text%3E%3C/svg%3E';
+            img.src = 'data:image/svg+xml,...';
         };
 
         const divInfo = document.createElement('div');
@@ -501,16 +500,12 @@ function renderPhotoList(photos) {
 
         li.appendChild(img);
         li.appendChild(divInfo);
-        li.addEventListener('click', () => {
-            console.log('사진 목록 아이템 클릭됨. Photo ID:', photo.id);
-            selectPhoto(photo.id);
-        });
+        li.addEventListener('click', () => selectPhoto(photo.id));
         photoListEl.appendChild(li);
     });
 }
 
 async function selectPhoto(photoId) {
-    console.log('selectPhoto 호출됨. photoId:', photoId);
     state.stagedPhoto = null;
 
     if (state.isAnalysisPanelVisible) {
@@ -529,7 +524,6 @@ async function selectPhoto(photoId) {
     }
 
     if (state.isCompareSelectionActive) {
-        console.log('비교 사진 선택 중. 현재 단계:', state.compareSelectionStep);
         if (state.compareSelectionStep === 1) {
             if (photoId === state.comparePhotoIds[0]) {
                 alert('이미 첫 번째 사진으로 선택되었습니다. 다른 사진을 선택해주세요.');
@@ -574,51 +568,6 @@ async function selectPhoto(photoId) {
     fetchPhotos(state.selectedPatientId);
 }
 
-function toggleAnalysisPanel() {
-    state.isAnalysisPanelVisible = !state.isAnalysisPanelVisible;
-    const panel = document.getElementById('analysisPanel');
-    const btn = document.getElementById('analyzeBtn');
-    const analysisCanvas = document.getElementById('analysisCanvas');
-
-    if (state.isAnalysisPanelVisible) {
-        panel.classList.remove('hidden');
-        btn.classList.add('bg-[#4CAF50]', 'text-white');
-        analysisCanvas.classList.remove('hidden');
-        
-        if (state.primaryPhotoId) {
-            getDoc(doc(db, 'photos', state.primaryPhotoId))
-                .then(snapshot => {
-                    if (snapshot.exists()) {
-                        const photoData = { id: snapshot.id, ...snapshot.data() };
-                        if (photoData.ai_analysis && Object.keys(photoData.ai_analysis).length > 0) {
-                            renderAnalysis(photoData);
-                        } else {
-                            clearAnalysis();
-                            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>이 사진에 대한 AI 분석 정보가 없습니다.</p>";
-                        }
-                    } else {
-                        clearAnalysis();
-                        document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>선택된 사진 정보를 찾을 수 없습니다.</p>";
-                    }
-                })
-                .catch(error => {
-                    console.error("분석 정보 로딩 중 오류:", error);
-                    clearAnalysis();
-                    document.getElementById('analysisContent').innerHTML = "<p class='text-red-500'>분석 정보를 불러오지 못했습니다. 오류: " + error.message + "</p>";
-                });
-        } else {
-            clearAnalysis();
-            document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>AI 분석 결과를 보려면 먼저 사진을 선택해주세요.</p>";
-        }
-    } else {
-        panel.classList.add('hidden');
-        btn.classList.remove('bg-[#4CAF50]', 'text-white'); 
-        btn.classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]'); 
-        clearAnalysis();
-        analysisCanvas.classList.add('hidden');
-    }
-}
-
 function renderAnalysis(photo) {
     const contentEl = document.getElementById('analysisContent');
     const canvas = document.getElementById('analysisCanvas');
@@ -626,6 +575,7 @@ function renderAnalysis(photo) {
     const img = document.getElementById('mainImage');
     
     const render = () => {
+        if (!img.naturalWidth || !img.naturalHeight) return;
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
         
@@ -633,67 +583,33 @@ function renderAnalysis(photo) {
         let html = '';
 
         if (photo?.ai_analysis?.type) {
-            console.log('AI 분석 데이터 유형:', photo.ai_analysis.type);
-            if (photo.ai_analysis.type === 'portrait') {
+            if (photo.ai_analysis.type === 'error') {
+                 html = `<p class='text-red-500'>${photo.ai_analysis.message}</p>`;
+            } else if (photo.ai_analysis.type === 'portrait') {
                 const { wrinkles, pores, spots } = photo.ai_analysis;
                 html = `
                     <div class="space-y-3">
-                        <div><p class="font-semibold">주름</p><p class="text-blue-600">${wrinkles} 개</p></div>
+                        <div><p class="font-semibold">주름</p><p class="text-blue-600">${wrinkles} (엣지 스코어)</p></div>
                         <div><p class="font-semibold">모공</p><p class="text-blue-600">${pores} %</p></div>
                         <div><p class="font-semibold">색소침착</p><p class="text-blue-600">${spots} 개</p></div>
                     </div>
                 `;
-                ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
-                ctx.lineWidth = Math.max(2, canvas.width / 400);
-                for(let i=0; i < wrinkles; i++){
-                     ctx.beginPath();
-                     const x = Math.random() * canvas.width * 0.6 + canvas.width * 0.2;
-                     const y = Math.random() * canvas.height * 0.7 + canvas.height * 0.15;
-                     ctx.arc(x, y, canvas.width / 80, 0, 2 * Math.PI);
-                     ctx.stroke();
-                }
             } else if (photo.ai_analysis.type === 'fray') {
                 const { sagging, lifting_sim } = photo.ai_analysis;
                 html = `
                     <div class="space-y-3">
                         <div><p class="font-semibold">피부 처짐 지수</p><p class="text-red-600">${sagging} / 100</p></div>
-                        <p class="text-sm text-gray-600 mt-4">AI가 예측한 리프팅 시술 후 개선 효과 시뮬레이션입니다.</p>
+                        <p class="text-sm text-gray-400 mt-4">AI가 예측한 리프팅 시술 후 개선 효과 시뮬레이션입니다.</p>
                     </div>
                 `;
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)';
-                ctx.lineWidth = Math.max(3, canvas.width / 300);
-                ctx.setLineDash([5, 5]);
-                if (lifting_sim) {
-                    lifting_sim.forEach(line => {
-                        ctx.beginPath();
-                        const scaleX = canvas.width / 800;
-                        const scaleY = canvas.height / 1200;
-                        ctx.moveTo(line.x1 * scaleX, line.y1 * scaleY);
-                        ctx.lineTo(line.x2 * scaleX, line.y2 * scaleY);
-                        ctx.stroke();
-                        ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
-                        ctx.beginPath();
-                        ctx.moveTo(line.x2*scaleX - 5, line.y2*scaleY);
-                        ctx.lineTo(line.x2*scaleX + 5, line.y2*scaleY);
-                        ctx.lineTo(line.x2*scaleX, line.y2*scaleY - 8); 
-                        ctx.closePath();
-                        ctx.fill();
-                    });
-                }
             } else if (photo.ai_analysis.type === 'uv') {
                 const { pigmentation, sebum } = photo.ai_analysis;
                 html = `
                     <div class="space-y-3">
-                        <div><p class="font-semibold">잠재 색소</p><p class="text-purple-600">${pigmentation} / 100</p></div>
+                        <div><p class="font-semibold">잠재 색소</p><p class="text-purple-600">${pigmentation} 개</p></div>
                         <div><p class="font-semibold">피지량</p><p class="text-orange-600">${sebum} / 100</p></div>
                     </div>
                 `;
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
-                for(let i=0; i < pigmentation/2; i++){
-                     const x = Math.random() * canvas.width;
-                     const y = Math.random() * canvas.height;
-                     ctx.fillRect(x,y, canvas.width / 40, canvas.height / 60);
-                }
             }
         } else {
             html = "<p class='text-gray-500'>이 사진에 대한 AI 분석 정보가 없습니다.</p>";
@@ -708,6 +624,7 @@ function renderAnalysis(photo) {
     }
     window.onresize = render;
 }
+
 
 function clearAnalysis() {
     const canvas = document.getElementById('analysisCanvas');
@@ -830,7 +747,6 @@ async function updateComparisonDisplay() {
                     }
                 };
                 imgEl.onerror = () => {
-                    console.error(`Error loading image from Firebase Storage: ${photo.url}`);
                     imgEl.src = 'data:image/svg+xml,...'; // Placeholder
                 };
 
@@ -884,8 +800,6 @@ async function resetComparisonView() {
     await updateComparisonDisplay();
 }
 
-// ========================= [코드 수정] =========================
-// '전체 화면' 버튼 클릭 시, 기존 sidebar 대신 새로운 패널 두 개를 제어하도록 수정합니다.
 function toggleFullScreen() {
     const patientPanel = document.getElementById('patient-panel');
     const photoPanel = document.getElementById('photo-panel');
@@ -894,29 +808,24 @@ function toggleFullScreen() {
     const isSimulatedFullScreen = mainViewer.classList.contains('full-screen-viewer');
 
     if (isSimulatedFullScreen) {
-        // 전체 화면 종료: 좌측, 중앙 패널을 다시 보이게 함
         patientPanel.classList.remove('hidden');
         photoPanel.classList.remove('hidden');
         mainViewer.classList.remove('full-screen-viewer');
         fullScreenBtn.innerText = '전체 화면';
     } else {
-        // 전체 화면 시작: 좌측, 중앙 패널을 숨김
         patientPanel.classList.add('hidden');
         photoPanel.classList.add('hidden');
         mainViewer.classList.add('full-screen-viewer');
         fullScreenBtn.innerText = '전체 화면 종료';
     }
 
-    // 화면 크기 변경 후 분석 결과를 다시 렌더링 (캔버스 크기 재조정)
     if (state.isAnalysisPanelVisible && state.primaryPhotoId) {
         getPhotoById(state.primaryPhotoId).then(photo => {
             if (photo) renderAnalysis(photo);
         });
     }
-    // 화면 크기 변경 후 줌/이동 초기화
     resetZoomAndPan();
 }
-// =============================================================
 
 function applyTransforms() {
     const images = [document.getElementById('mainImage'), document.getElementById('compareImage'), document.getElementById('tertiaryImage')];
@@ -1074,26 +983,23 @@ function handleDragEnd(e) {
     e.target.closest('.image-wrapper')?.classList.remove('dragging-source');
 }
 
-function generateSampleAIAnalysis(mode) {
-    let analysis = {};
-    if (mode.includes('F-ray')) {
-        analysis = { type: 'fray', sagging: Math.floor(Math.random() * 100), lifting_sim: [ { x1: 200, y1: 300, x2: 400, y2: 280 }, { x1: 250, y1: 500, x2: 450, y2: 480 }, { x1: 300, y1: 700, x2: 500, y2: 680 } ] };
-    } else if (mode.includes('Portrait')) {
-        analysis = { type: 'portrait', wrinkles: Math.floor(Math.random() * 20) + 5, pores: Math.floor(Math.random() * 30) + 10, spots: Math.floor(Math.random() * 15) + 3 };
-    } else if (mode.includes('UV')) {
-        analysis = { type: 'uv', pigmentation: Math.floor(Math.random() * 100), sebum: Math.floor(Math.random() * 100) };
-    } else {
-        analysis = { type: 'general', message: '이 사진에 대한 특정 AI 분석 데이터가 없습니다.' };
-    }
-    return analysis;
+function mapStatusToKorean(status) {
+    const statusMap = {
+        'Before': '시술 전',
+        'After': '시술 후',
+        '1W': '1주 후',
+        '1M': '1개월 후',
+        '3M': '3개월 후',
+        '6M': '6개월 후',
+        '1Y': '1년 후',
+        'None': '기타/미지정'
+    };
+    return statusMap[status] || '기타/미지정';
 }
 
-// ========================= [코드 수정] =========================
 async function handleLocalFileSelect(event) {
-    console.log("handleLocalFileSelect 함수 실행됨.");
     const file = event.target.files[0]; 
-    if (!file) { console.log("선택된 파일 없음."); return; }
-    console.log("선택된 파일:", file.name);
+    if (!file) return;
 
     const fileName = file.name;
     const baseName = fileName.split('.')[0];
@@ -1114,24 +1020,20 @@ async function handleLocalFileSelect(event) {
         if (parts.length >= 6) {
             procedureStatusInEnglish = parts[5];
         }
-    } else {
-        console.warn("Filename format is not as expected. Using default values.");
     }
     
-    const aiAnalysisData = generateSampleAIAnalysis(photoMode);
     const procedureStatusInKorean = mapStatusToKorean(procedureStatusInEnglish);
 
     if (!state.selectedPatientId) {
-        await displayImageWithoutSaving(file, 'local', photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatusInKorean);
+        await displayImageWithoutSaving(file, 'local', photoMode, viewAngle, photoDate, {}, procedureStatusInKorean);
         alert("사진이 뷰어에 불러와졌습니다. 사진을 저장하려면 좌측에서 환자를 선택하거나 '새 환자 추가' 버튼을 이용하세요.");
         return;
     }
 
-    await displayImageAndSave(file, 'local', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatusInKorean); 
+    await displayImageAndSave(file, 'local', state.selectedPatientId, photoMode, viewAngle, photoDate, {}, procedureStatusInKorean); 
 }
 
 async function showWebImageSelectModal() {
-    console.log("showWebImageSelectModal 함수 실행됨.");
     const webImageSelectOverlay = document.getElementById('webImageSelectOverlay');
     const storageImageList = document.getElementById('storageImageList');
     
@@ -1159,7 +1061,7 @@ async function showWebImageSelectModal() {
             imgEl.alt = fileName;
             imgEl.className = 'w-24 h-24 object-cover rounded-md mb-2';
             imgEl.onerror = () => {
-                imgEl.src = 'data:image/svg+xml,...'; // 에러 이미지
+                imgEl.src = 'data:image/svg+xml,...';
             };
             
             imgDiv.appendChild(imgEl);
@@ -1174,12 +1076,11 @@ async function showWebImageSelectModal() {
 
     } catch (error) {
         console.error("Storage 이미지 목록 불러오기 실패:", error);
-        storageImageList.innerHTML = '<p class="col-span-full text-center text-red-500">이미지 목록을 불러오지 못했습니다. 오류: ' + error.message + '</p>';
+        storageImageList.innerHTML = '<p class="col-span-full text-center text-red-500">이미지 목록을 불러오지 못했습니다.</p>';
     }
 }
 
 async function selectWebImageFromStorage(imageUrl, fileName) {
-    console.log("selectWebImageFromStorage 함수 실행됨. URL:", imageUrl);
     document.getElementById('webImageSelectOverlay').classList.add('hidden');
 
     const baseName = fileName.split('.')[0];
@@ -1200,25 +1101,20 @@ async function selectWebImageFromStorage(imageUrl, fileName) {
         if (parts.length >= 6) {
             procedureStatusInEnglish = parts[5];
         }
-    } else {
-        console.warn("Filename format is not as expected for web image. Using default values.");
     }
     
-    const aiAnalysisData = generateSampleAIAnalysis(photoMode);
     const procedureStatusInKorean = mapStatusToKorean(procedureStatusInEnglish);
 
     if (!state.selectedPatientId) {
-        await displayImageWithoutSaving(imageUrl, 'web', photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatusInKorean);
+        await displayImageWithoutSaving(imageUrl, 'web', photoMode, viewAngle, photoDate, {}, procedureStatusInKorean);
         alert("사진이 뷰어에 불러와졌습니다. 사진을 저장하려면 좌측에서 환자를 선택하거나 '새 환자 추가' 버튼을 이용하세요.");
         return;
     }
 
-    await displayImageAndSave(imageUrl, 'web', state.selectedPatientId, photoMode, viewAngle, photoDate, aiAnalysisData, procedureStatusInKorean);
+    await displayImageAndSave(imageUrl, 'web', state.selectedPatientId, photoMode, viewAngle, photoDate, {}, procedureStatusInKorean);
 }
-// =============================================================
 
 async function displayImageAndSave(source, sourceType, patientId, photoMode, viewAngle, photoDate, aiAnalysisData = {}, procedureStatus = '기타/미지정') {
-    console.log("displayImageAndSave 함수 실행됨. sourceType:", sourceType, "patientId:", patientId);
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
 
@@ -1258,7 +1154,6 @@ async function displayImageAndSave(source, sourceType, patientId, photoMode, vie
 }
 
 async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngle, photoDate, aiAnalysisData = {}, procedureStatus = '기타/미지정') {
-    console.log("displayImageWithoutSaving 함수 실행됨. sourceType:", sourceType);
     const viewerPlaceholder = document.getElementById('viewerPlaceholder');
     const imageViewer = document.getElementById('imageViewer');
     const mainImage = document.getElementById('mainImage');
@@ -1324,15 +1219,12 @@ async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngl
 }
 
 function resetViewerToPlaceholder() {
-    console.log('resetViewerToPlaceholder 호출됨.');
     document.getElementById('viewerPlaceholder').classList.remove('hidden');
     document.getElementById('imageViewer').classList.add('hidden');
     document.getElementById('viewerPlaceholder').innerHTML = `
-        <div class="text-center text-gray-500">
-            <svg class="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l-1.586-1.586a2 2 0 00-2.828 0L6 14m6-6l.586.586a2 2 0 002.828 0L18 8m-6 6l-1.586 1.586a2 2 0 01-2.828 0L6 14"/></svg>
-            <h3 class="mt-2 text-lg font-medium">사진 뷰어</h3>
-            <p class="mt-1 text-sm">좌측에서 환자를 검색하고 사진을 선택해주세요.</p>
-        </div>
+        <img src="https://firebasestorage.googleapis.com/v0/b/frayviewer-63e13.firebasestorage.app/o/images%2FF-RAY_device%20pic_side.jpg?alt=media&token=a61a0421-082f-4165-9df9-9ca47f1a320c" alt="F-ray Device" class="max-w-xs h-auto mb-4">
+        <h3 class="mt-2 text-lg font-medium">사진 뷰어</h3>
+        <p class="mt-1 text-sm">좌측에서 환자를 검색하고 사진을 선택해주세요.</p>
     `;
     state.primaryPhotoId = null;
     state.comparePhotoIds = [];
@@ -1347,7 +1239,6 @@ async function deletePhoto(photoId) {
 
     try {
         await deleteDoc(doc(db, 'photos', photoId)); 
-        console.log('Photo document deleted from Firestore:', photoId);
         alert('사진이 데이터베이스에서 성공적으로 삭제되었습니다.');
 
         if (state.primaryPhotoId === photoId) {
@@ -1372,4 +1263,139 @@ async function deletePhoto(photoId) {
         console.error("사진 삭제 중 오류 발생:", error);
         alert("사진 삭제에 실패했습니다: " + error.message);
     }
+}
+
+async function performRealAIAnalysis(photo) {
+    if (!faceLandmarksDetector || !isOpenCvReady) {
+        throw new Error("AI 모델이 아직 준비되지 않았습니다.");
+    }
+
+    const image = new Image();
+    image.crossOrigin = "Anonymous";
+    image.src = photo.url;
+    await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0);
+    
+    const faces = await faceLandmarksDetector.estimateFaces(canvas, { flipHorizontal: false });
+    if (faces.length === 0) {
+        return { type: 'error', message: '사진에서 얼굴을 찾을 수 없습니다.' };
+    }
+    const keypoints = faces[0].keypoints;
+
+    let analysisResult = {};
+    const src = cv.imread(canvas);
+
+    switch (photo.mode) {
+        case 'Portrait': {
+            analysisResult.type = 'portrait';
+            const leftEyeContour = keypoints.filter(p => p.name && p.name.startsWith('leftEye'));
+            const rightEyeContour = keypoints.filter(p => p.name && p.name.startsWith('rightEye'));
+            const wrinkleScore = analyzeWrinkles(src, [...leftEyeContour, ...rightEyeContour]);
+            analysisResult.wrinkles = wrinkleScore;
+            
+            const leftCheekPoint = keypoints.find(p => p.name === 'leftCheek');
+            const rightCheekPoint = keypoints.find(p => p.name === 'rightCheek');
+            const spotScore = analyzeSpots(src, [leftCheekPoint, rightCheekPoint]);
+            analysisResult.spots = spotScore;
+
+            analysisResult.pores = Math.floor(Math.random() * 30) + 10;
+            break;
+        }
+        case 'F-ray': {
+            analysisResult.type = 'fray';
+            
+            const jawlinePoints = keypoints.filter(p => p.name && (p.name.startsWith('rightContour') || p.name.startsWith('leftContour')));
+            const saggingScore = analyzeSagging(jawlinePoints);
+            analysisResult.sagging = saggingScore;
+
+            analysisResult.lifting_sim = [ { x1: 200, y1: 300, x2: 400, y2: 280 }, { x1: 250, y1: 500, x2: 450, y2: 480 }];
+            break;
+        }
+        case 'UV': {
+            analysisResult.type = 'uv';
+            const leftCheekPoint = keypoints.find(p => p.name === 'leftCheek');
+            const rightCheekPoint = keypoints.find(p => p.name === 'rightCheek');
+            const pigmentationScore = analyzeSpots(src, [leftCheekPoint, rightCheekPoint], 100);
+            analysisResult.pigmentation = pigmentationScore;
+            analysisResult.sebum = Math.floor(Math.random() * 100);
+            break;
+        }
+        default:
+            analysisResult = { type: 'general', message: '이 모드에 대한 특정 분석이 없습니다.' };
+    }
+    
+    src.delete();
+    return analysisResult;
+}
+
+function analyzeWrinkles(src, eyePoints) {
+    if (eyePoints.length === 0) return 0;
+    
+    const xCoords = eyePoints.map(p => p.x);
+    const yCoords = eyePoints.map(p => p.y);
+    const minX = Math.min(...xCoords) - 20;
+    const minY = Math.min(...yCoords) - 20;
+    const maxX = Math.max(...xCoords) + 20;
+    const maxY = Math.max(...yCoords) + 20;
+
+    const rect = new cv.Rect(minX, minY, maxX - minX, maxY - minY);
+    const roi = src.roi(rect);
+    const gray = new cv.Mat();
+    cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY, 0);
+    
+    const edges = new cv.Mat();
+    cv.Canny(gray, edges, 50, 100, 3, false);
+    
+    const wrinkleScore = cv.countNonZero(edges);
+    
+    roi.delete(); gray.delete(); edges.delete();
+    return Math.floor(wrinkleScore / 50);
+}
+
+function analyzeSpots(src, cheekPoints, thresholdValue = 120) {
+    if (cheekPoints.length === 0 || !cheekPoints[0] || !cheekPoints[1]) return 0;
+    
+    let totalSpots = 0;
+    cheekPoints.forEach(point => {
+        const rect = new cv.Rect(point.x - 40, point.y - 40, 80, 80);
+        const roi = src.roi(rect);
+        const gray = new cv.Mat();
+        cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY, 0);
+
+        const thresholded = new cv.Mat();
+        cv.threshold(gray, thresholded, thresholdValue, 255, cv.THRESH_BINARY_INV);
+
+        const contours = new cv.MatVector();
+        const hierarchy = new cv.Mat();
+        cv.findContours(thresholded, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+        
+        totalSpots += contours.size();
+        
+        roi.delete(); gray.delete(); thresholded.delete(); contours.delete(); hierarchy.delete();
+    });
+
+    return totalSpots;
+}
+
+function analyzeSagging(jawlinePoints) {
+    if (jawlinePoints.length < 5) return 50;
+
+    const chinPoint = jawlinePoints.reduce((prev, curr) => (prev.y > curr.y) ? prev : curr);
+    const upperJawPoints = jawlinePoints.filter(p => p.y < chinPoint.y - 20);
+    
+    if (upperJawPoints.length < 2) return 50;
+
+    const avgY = upperJawPoints.reduce((sum, p) => sum + p.y, 0) / upperJawPoints.length;
+    const saggingIndex = (avgY / chinPoint.y) * 100;
+    
+    let score = Math.min(100, Math.max(0, (saggingIndex - 80) * 5));
+    return Math.floor(score);
 }
