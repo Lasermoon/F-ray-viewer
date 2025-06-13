@@ -58,8 +58,8 @@ const state = {
 let faceLandmarksDetector = null;
 let isOpenCvReady = false;
 
-// **[수정됨]** `onOpenCvReady` 함수를 `window` 객체에 직접 할당합니다.
-window.onOpenCvReady = function() {
+// OpenCV.js가 로딩되면 호출될 전역 함수
+function onOpenCvReady() {
     console.log("OpenCV.js is ready.");
     isOpenCvReady = true;
     checkAndHideLoadingOverlay();
