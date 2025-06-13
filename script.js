@@ -1,9 +1,12 @@
 // Firebase SDK를 웹사이트로 불러오는 부분입니다.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+// getDoc, doc을 추가하여 Firestore 문서 직접 참조 및 가져오기 기능을 포함합니다.
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, documentId, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// Storage 관련 SDK를 불러옵니다.
 import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
-// Firebase 프로젝트 설정 정보입니다.
+
+// 여러분이 알려주신 Firebase 프로젝트 설정 정보입니다.
 const firebaseConfig = {
    apiKey: "AIzaSyB4GGKFIox_Wl2mXkG5cSkuHdEcsHgfuNU", // 여러분의 실제 API 키로 변경하세요.
   authDomain: "frayviewer-63e13.firebaseapp.com", // 여러분의 실제 Auth Domain으로 변경하세요.
@@ -14,53 +17,53 @@ const firebaseConfig = {
   measurementId: "G-2F5YC8ME05" // 여러분의 실제 Measurement ID로 변경하세요.
 };
 
-// Firebase 앱 초기화
+// Firebase 앱을 초기화하고 Storage 서비스에 연결합니다.
 const app = initializeApp(firebaseConfig);
 const storage = getStorage(app);
+// Firestore 데이터베이스 서비스에 연결합니다.
 const db = getFirestore(app);
 
-// state 변수들
+// state: 웹사이트의 현재 상태를 저장하는 변수들입니다.
 const state = {
     selectedPatientId: null,
-    primaryPhotoId: null,
+    primaryPhotoId: null, // 이 값은 이제 Firestore 문서 ID 또는 Storage URL이 될 수 있습니다.
     secondaryPhotoId: null,
     tertiaryPhotoId: null,
-    comparePhotoIds: [],
-    currentModeFilter: 'all',
-    currentDateFilter: '',
-    currentAngleFilter: 'all',
-    currentProcedureStatusFilter: 'all',
-    isAnalysisPanelVisible: false,
-    isCompareSelectionActive: false,
-    isComparingPhotos: false,
-    compareSelectionStep: 0,
-    compareCount: 0,
-    currentZoomLevel: 1.0,
-    zoomStep: 0.2,
-    maxZoom: 3.0,
-    minZoom: 0.5,
-    isDragging: false,
-    startX: 0,
-    startY: 0,
-    currentTranslateX: 0,
-    currentTranslateY: 0,
-    lastTranslateX: 0,
-    lastTranslateY: 0,
-    stagedPhoto: null,
+    comparePhotoIds: [], // 비교 뷰에 표시될 사진 ID들의 배열 (순서 중요)
+    currentModeFilter: 'all', // 기존 currentFilter의 이름을 변경하여 용도를 명확히 함
+    currentDateFilter: '', // 촬영 날짜 필터 추가 (YYYY-MM-DD)
+    currentAngleFilter: 'all', // 각도 필터 추가
+    currentProcedureStatusFilter: 'all', // [변경] 시술 상태 필터 추가
+    isAnalysisPanelVisible: false, // 분석 패널이 보이는지 여부
+    isCompareSelectionActive: false, // 사용자가 비교 모드 선택 중 (2장/3장 선택 중)
+    isComparingPhotos: false, // 2장 또는 3장의 사진이 실제로 뷰어에 표시되어 비교 중인 상태 (이 상태에서 드래그앤드롭 가능)
+    compareSelectionStep: 0, // 0: 선택 중 아님, 1: 두 번째 선택, 2: 세 번째 선택
+    compareCount: 0, // 2 또는 3
+    currentZoomLevel: 1.0, // 현재 확대 레벨 (1.0 = 원본 크기)
+    zoomStep: 0.2, // 확대/축소 시 변화량
+    maxZoom: 3.0, // 최대 확대 레벨
+    minZoom: 0.5, // 최소 축소 레벨
+    isDragging: false, // 사진 드래그 중인지 여부 (팬/줌용)
+    startX: 0, // 드래그 시작 시 마우스 X 좌표 (팬/줌용)
+    startY: 0, // 드래그 시작 시 마우스 Y 좌표 (팬/줌용)
+    currentTranslateX: 0, // 현재 X축 이동량 (팬/줌용)
+    currentTranslateY: 0, // 현재 Y축 이동량 (팬/줌용)
+    lastTranslateX: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
+    lastTranslateY: 0, // 마지막 이동량 (드래그 연속을 위해 필요) (팬/줌용)
+    stagedPhoto: null, // { url: string, mode: string, viewAngle: string, file: File | null, procedureStatus: string } - 환자 미지정 상태의 사진 [변경] procedureStatus 추가
 };
+
 
 // AI 분석 관련 전역 변수
 let faceLandmarksDetector = null;
 let isOpenCvReady = false;
 
-// ================== [코드 수정] 함수를 window 객체에 할당 ==================
-// OpenCV.js가 로딩되면 호출될 전역 함수
+// **[수정됨]** `onOpenCvReady` 함수를 `window` 객체에 직접 할당합니다.
 window.onOpenCvReady = function() {
     console.log("OpenCV.js is ready.");
     isOpenCvReady = true;
     checkAndHideLoadingOverlay();
 }
-// ====================================================================
 
 // AI 모델 로딩 함수
 async function loadFaceDetector() {
@@ -74,7 +77,6 @@ async function loadFaceDetector() {
           runtime: 'tfjs',
         };
         faceLandmarksDetector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-        
         console.log("Face Landmarks Detection model loaded.");
     } catch (error) {
         console.error("Failed to load Face Detector:", error);
@@ -84,14 +86,12 @@ async function loadFaceDetector() {
     }
 }
 
-// 모든 모델 로딩이 완료되었는지 확인하고 오버레이 및 버튼 상태 변경
+// **[수정됨]** AI 모델 로딩 완료 후 버튼을 활성화하는 로직을 추가합니다.
 function checkAndHideLoadingOverlay() {
-    // 두 모델이 모두 준비되었을 때만 실행
     if (isOpenCvReady && faceLandmarksDetector) {
         document.getElementById('loadingOverlay').classList.replace('flex', 'hidden');
         console.log("All AI models are ready.");
 
-        // 'AI 분석' 버튼 활성화
         const analyzeBtn = document.getElementById('analyzeBtn');
         analyzeBtn.disabled = false;
         analyzeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -100,7 +100,6 @@ function checkAndHideLoadingOverlay() {
     }
 }
 
-// 페이지 로드 시 실행
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOMContentLoaded 이벤트 발생. 스크립트 실행 시작.');
     fetchPatients(); 
@@ -108,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFaceDetector();
 });
 
-// ... 이하 모든 함수는 이전과 동일합니다 ...
 function setupEventListeners() {
     console.log('setupEventListeners 함수 호출됨.');
     const patientSearch = document.getElementById('patientSearch');
@@ -249,7 +247,6 @@ async function toggleAnalysisPanel() {
                 clearAnalysis();
                 document.getElementById('analysisContent').innerHTML = "<p class='text-red-500'>AI 분석에 실패했습니다. " + error.message + "</p>";
             }
-
         } else {
             clearAnalysis();
             document.getElementById('analysisContent').innerHTML = "<p class='text-gray-500'>AI 분석 결과를 보려면 먼저 사진을 선택해주세요.</p>";
@@ -691,8 +688,7 @@ async function updateComparisonDisplay() {
     const viewerPhotoInfo = document.getElementById('viewerPhotoInfo');
 
     document.getElementById('viewerPlaceholder').classList.add('hidden');
-    document.getElementById('imageViewer').classList.remove('hidden');
-    document.getElementById('imageViewer').classList.add('flex');
+    document.getElementById('imageViewer').classList.replace('hidden', 'flex');
 
     const photoElements = [
         { id: 'mainImage', wrapper: mainImageWrapper },
@@ -973,16 +969,7 @@ function handleDragEnd(e) {
 }
 
 function mapStatusToKorean(status) {
-    const statusMap = {
-        'Before': '시술 전',
-        'After': '시술 후',
-        '1W': '1주 후',
-        '1M': '1개월 후',
-        '3M': '3개월 후',
-        '6M': '6개월 후',
-        '1Y': '1년 후',
-        'None': '기타/미지정'
-    };
+    const statusMap = { 'Before': '시술 전', 'After': '시술 후', '1W': '1주 후', '1M': '1개월 후', '3M': '3개월 후', '6M': '6개월 후', '1Y': '1년 후', 'None': '기타/미지정' };
     return statusMap[status] || '기타/미지정';
 }
 
@@ -1014,197 +1001,93 @@ async function handleLocalFileSelect(event) {
     const procedureStatusInKorean = mapStatusToKorean(procedureStatusInEnglish);
 
     if (!state.selectedPatientId) {
-        await displayImageWithoutSaving(file, 'local', photoMode, viewAngle, photoDate, {}, procedureStatusInKorean);
-        alert("사진이 뷰어에 불러와졌습니다. 사진을 저장하려면 좌측에서 환자를 선택하거나 '새 환자 추가' 버튼을 이용하세요.");
-        return;
+        await displayImageWithoutSaving(file, 'local', { mode: photoMode, viewAngle, date: photoDate, procedureStatus: procedureStatusInKorean });
+        alert("사진이 뷰어에 임시로 불러와졌습니다. 저장하려면 환자를 선택하세요.");
+    } else {
+        await displayImageAndSave(file, 'local', state.selectedPatientId, { mode: photoMode, viewAngle, date: photoDate, procedureStatus: procedureStatusInKorean });
     }
-
-    await displayImageAndSave(file, 'local', state.selectedPatientId, photoMode, viewAngle, photoDate, {}, procedureStatusInKorean); 
 }
 
 async function showWebImageSelectModal() {
-    const webImageSelectOverlay = document.getElementById('webImageSelectOverlay');
     const storageImageList = document.getElementById('storageImageList');
-    
-    webImageSelectOverlay.classList.remove('hidden');
-    storageImageList.innerHTML = '<p class="col-span-full text-center text-gray-500">Storage에서 이미지를 불러오는 중...</p>';
+    storageImageList.innerHTML = '<p class="col-span-full text-center text-gray-500">Storage 이미지를 불러오는 중...</p>';
+    document.getElementById('webImageSelectOverlay').classList.remove('hidden');
 
     try {
-        const listRef = ref(storage, 'images/');
-        const res = await listAll(listRef);
+        const res = await listAll(ref(storage, 'images/'));
         storageImageList.innerHTML = '';
-
         if (res.items.length === 0) {
-            storageImageList.innerHTML = '<p class="col-span-full text-center text-gray-500">\'images\' 폴더에 사진이 없습니다.</p>';
+            storageImageList.innerHTML = '<p class="col-span-full text-center text-gray-500">저장된 이미지가 없습니다.</p>';
             return;
         }
 
-        for (const itemRef of res.items) {
-            const imageUrl = await getDownloadURL(itemRef);
-            const fileName = itemRef.name;
-
-            const imgDiv = document.createElement('div');
-            imgDiv.className = 'relative flex flex-col items-center justify-center p-2 border rounded-md hover:shadow-lg transition-shadow';
-            const imgEl = document.createElement('img');
-            imgEl.src = imageUrl;
-            imgEl.alt = fileName;
-            imgEl.className = 'w-24 h-24 object-cover rounded-md mb-2';
-            imgEl.onerror = () => {
-                imgEl.src = 'data:image/svg+xml,...';
-            };
-            
-            imgDiv.appendChild(imgEl);
-            const spanFileName = document.createElement('span');
-            spanFileName.className = 'text-xs text-gray-600 truncate w-full text-center';
-            spanFileName.innerText = fileName;
-            imgDiv.appendChild(spanFileName);
-
-            imgDiv.addEventListener('click', () => selectWebImageFromStorage(imageUrl, fileName));
-            storageImageList.appendChild(imgDiv);
-        }
-
+        res.items.forEach(async itemRef => {
+            const url = await getDownloadURL(itemRef);
+            const div = document.createElement('div');
+            div.className = 'p-2 border rounded-md hover:shadow-lg transition-shadow cursor-pointer';
+            div.innerHTML = `<img src="${url}" alt="${itemRef.name}" class="w-24 h-24 object-cover rounded-md mb-2 mx-auto"><span class="text-xs text-gray-600 truncate w-full text-center block">${itemRef.name}</span>`;
+            div.addEventListener('click', () => selectWebImageFromStorage(url, itemRef.name));
+            storageImageList.appendChild(div);
+        });
     } catch (error) {
         console.error("Storage 이미지 목록 불러오기 실패:", error);
-        storageImageList.innerHTML = '<p class="col-span-full text-center text-red-500">이미지 목록을 불러오지 못했습니다.</p>';
+        storageImageList.innerHTML = '<p class="col-span-full text-center text-red-500">이미지를 불러오지 못했습니다.</p>';
     }
 }
 
 async function selectWebImageFromStorage(imageUrl, fileName) {
     document.getElementById('webImageSelectOverlay').classList.add('hidden');
-
-    const baseName = fileName.split('.')[0];
-    const parts = baseName.split('_');
-
-    let photoMode = 'Web URL';
-    let viewAngle = 'C0';
-    let photoDate = new Date().toISOString().slice(0, 10);
-    let procedureStatusInEnglish = 'None';
-
-    if (parts.length >= 5) {
-        photoMode = parts[2];
-        viewAngle = parts[3];
-        const datePart = parts[4];
-        if (datePart && datePart.length === 8 && !isNaN(datePart)) {
-            photoDate = `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
-        }
-        if (parts.length >= 6) {
-            procedureStatusInEnglish = parts[5];
-        }
-    }
-    
-    const procedureStatusInKorean = mapStatusToKorean(procedureStatusInEnglish);
+    const parts = fileName.split('.')[0].split('_');
+    const photoData = {
+        mode: parts.length >= 3 ? parts[2] : 'Web URL',
+        viewAngle: parts.length >= 4 ? parts[3] : 'C0',
+        date: parts.length >= 5 && parts[4].length === 8 ? `${parts[4].slice(0,4)}-${parts[4].slice(4,6)}-${parts[4].slice(6,8)}` : new Date().toISOString().slice(0, 10),
+        procedureStatus: mapStatusToKorean(parts.length >= 6 ? parts[5] : 'None'),
+    };
 
     if (!state.selectedPatientId) {
-        await displayImageWithoutSaving(imageUrl, 'web', photoMode, viewAngle, photoDate, {}, procedureStatusInKorean);
-        alert("사진이 뷰어에 불러와졌습니다. 사진을 저장하려면 좌측에서 환자를 선택하거나 '새 환자 추가' 버튼을 이용하세요.");
-        return;
+        await displayImageWithoutSaving(imageUrl, 'web', photoData);
+        alert("사진이 뷰어에 임시로 불러와졌습니다. 저장하려면 환자를 선택하세요.");
+    } else {
+        await displayImageAndSave(imageUrl, 'web', state.selectedPatientId, photoData);
     }
-
-    await displayImageAndSave(imageUrl, 'web', state.selectedPatientId, photoMode, viewAngle, photoDate, {}, procedureStatusInKorean);
 }
 
-async function displayImageAndSave(source, sourceType, patientId, photoMode, viewAngle, photoDate, aiAnalysisData = {}, procedureStatus = '기타/미지정') {
-    const viewerPlaceholder = document.getElementById('viewerPlaceholder');
-    const imageViewer = document.getElementById('imageViewer');
-
-    viewerPlaceholder.classList.remove('hidden');
-    imageViewer.classList.add('hidden');
-    viewerPlaceholder.innerHTML = `<div class="text-center text-gray-500"><h3 class="mt-2 text-lg font-medium">사진을 불러오는 중입니다...</h3></div>`;
-
+async function displayImageAndSave(source, sourceType, patientId, photoData) {
+    document.getElementById('viewerPlaceholder').innerHTML = `<h3 class="text-lg font-medium text-gray-400">사진을 저장하는 중...</h3>`;
     try {
-        let imageUrlToDisplay;
-
+        let imageUrl = source;
         if (sourceType === 'local') {
-            const file = source;
-            const storageRef = ref(storage, `photos/${patientId}/${file.name}_${Date.now()}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            imageUrlToDisplay = await getDownloadURL(snapshot.ref);
-        } else if (sourceType === 'web') {
-            imageUrlToDisplay = source;
+            const storageRef = ref(storage, `photos/${patientId}/${source.name}_${Date.now()}`);
+            const snapshot = await uploadBytes(storageRef, source);
+            imageUrl = await getDownloadURL(snapshot.ref);
         }
 
-        const newPhotoData = {
-            patientId, url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle,
-            date: photoDate, uploadedAt: new Date(), ai_analysis: aiAnalysisData,
-            procedureStatus: procedureStatus,
-        };
-        const docRef = await addDoc(collection(db, 'photos'), newPhotoData);
+        const docRef = await addDoc(collection(db, 'photos'), {
+            patientId, url: imageUrl, uploadedAt: new Date(), ai_analysis: {}, ...photoData
+        });
         state.primaryPhotoId = docRef.id;
-
-        state.comparePhotoIds = [state.primaryPhotoId];
+        state.comparePhotoIds = [docRef.id];
         await updateComparisonDisplay();
-        fetchPhotos(patientId);
-
+        await fetchPhotos(patientId);
     } catch (error) {
-        console.error("사진을 불러오거나 Firestore에 저장하는 중 오류 발생:", error);
-        alert("사진을 불러오거나 저장하는데 실패했습니다: " + error.message);
+        console.error("사진 저장 중 오류:", error);
+        alert("사진 저장에 실패했습니다.");
         resetViewerToPlaceholder();
     }
 }
 
-async function displayImageWithoutSaving(source, sourceType, photoMode, viewAngle, photoDate, aiAnalysisData = {}, procedureStatus = '기타/미지정') {
-    const viewerPlaceholder = document.getElementById('viewerPlaceholder');
-    const imageViewer = document.getElementById('imageViewer');
-    const mainImage = document.getElementById('mainImage');
-
-    viewerPlaceholder.classList.remove('hidden');
-    imageViewer.classList.add('hidden');
-    viewerPlaceholder.innerHTML = `<div class="text-center text-gray-500"><h3 class="mt-2 text-lg font-medium">사진을 불러오는 중입니다...</h3></div>`;
-
-    try {
-        let imageUrlToDisplay;
-
-        if (sourceType === 'local') {
-            imageUrlToDisplay = URL.createObjectURL(source);
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: source, date: photoDate, ai_analysis: aiAnalysisData, procedureStatus: procedureStatus };
-        } else if (sourceType === 'web') {
-            imageUrlToDisplay = source;
-            state.stagedPhoto = { url: imageUrlToDisplay, mode: photoMode, viewAngle: viewAngle, file: null, date: photoDate, ai_analysis: aiAnalysisData, procedureStatus: procedureStatus };
-        }
-        
-        state.primaryPhotoId = null;
-
-        const viewerPatientName = document.getElementById('viewerPatientName');
-        const viewerPhotoInfo = document.getElementById('viewerPhotoInfo');
-        const mainImageWrapper = document.getElementById('mainImageWrapper');
-        const compareImageWrapper = document.getElementById('compareImageWrapper');
-        const tertiaryImageWrapper = document.getElementById('tertiaryImageWrapper');
-        const imageContainer = document.getElementById('image-container');
-
-        document.getElementById('viewerPlaceholder').classList.add('hidden');
-        document.getElementById('imageViewer').classList.remove('hidden');
-        document.getElementById('imageViewer').classList.add('flex');
-
-        mainImage.src = imageUrlToDisplay;
-        mainImageWrapper.classList.remove('hidden', 'flex-1');
-        mainImageWrapper.classList.add('w-full');
-        compareImageWrapper.classList.add('hidden');
-        tertiaryImageWrapper.classList.add('hidden');
-
-        imageContainer.classList.remove('flex-row', 'gap-4');
-        imageContainer.classList.add('flex-col');
-
-        viewerPatientName.innerText = `환자 미지정 - 선택 필요`;
-        viewerPhotoInfo.innerText = `${photoDate} | ${photoMode} | ${viewAngle} | ${procedureStatus}`;
-
-        mainImage.onload = () => {
-            resetZoomAndPan();
-        };
-        mainImage.onerror = () => {
-            mainImage.src = 'data:image/svg+xml,...'; // Placeholder
-        };
-
-        state.isAnalysisPanelVisible = false;
-        document.getElementById('analysisPanel').classList.add('hidden');
-        document.getElementById('analyzeBtn').classList.remove('bg-[#4CAF50]', 'text-white');
-        document.getElementById('analyzeBtn').classList.add('bg-[#E8F5E9]', 'text-[#2E7D32]');
-
-    } catch (error) {
-        console.error("사진을 불러오는 중 오류 발생:", error);
-        alert("사진을 불러오는데 실패했습니다: " + error.message);
-        resetViewerToPlaceholder();
-        state.stagedPhoto = null;
-    }
+async function displayImageWithoutSaving(source, sourceType, photoData) {
+    const url = sourceType === 'local' ? URL.createObjectURL(source) : source;
+    state.stagedPhoto = { url, file: sourceType === 'local' ? source : null, ...photoData };
+    state.primaryPhotoId = null;
+    
+    document.getElementById('viewerPatientName').innerText = '환자 미지정';
+    document.getElementById('viewerPhotoInfo').innerText = `${photoData.date} | ${photoData.mode} | ${photoData.viewAngle} | ${photoData.procedureStatus}`;
+    document.getElementById('mainImage').src = url;
+    document.getElementById('imageViewer').classList.replace('hidden', 'flex');
+    document.getElementById('viewerPlaceholder').classList.add('hidden');
+    resetZoomAndPan();
 }
 
 function resetViewerToPlaceholder() {
@@ -1217,40 +1100,24 @@ function resetViewerToPlaceholder() {
     `;
     state.primaryPhotoId = null;
     state.comparePhotoIds = [];
-    state.isComparingPhotos = false;
-    state.isCompareSelectionActive = false;
 }
 
 async function deletePhoto(photoId) {
-    if (!confirm('정말로 이 사진을 삭제하시겠습니까? 데이터베이스에서만 삭제되며, 원본 사진 파일은 Storage에 유지됩니다.')) {
-        return;
-    }
+    if (!confirm('정말로 이 사진을 삭제하시겠습니까?')) return;
 
     try {
-        await deleteDoc(doc(db, 'photos', photoId)); 
-        alert('사진이 데이터베이스에서 성공적으로 삭제되었습니다.');
-
-        if (state.primaryPhotoId === photoId) {
-            state.primaryPhotoId = null; 
-        }
+        await deleteDoc(doc(db, 'photos', photoId));
+        alert('사진이 삭제되었습니다.');
         state.comparePhotoIds = state.comparePhotoIds.filter(id => id !== photoId);
-
-        if (state.comparePhotoIds.length > 0) {
-            state.primaryPhotoId = state.comparePhotoIds[0];
-            await updateComparisonDisplay();
-        } else {
-            resetViewerToPlaceholder(); 
-        }
-
-        if (state.selectedPatientId) {
-            fetchPhotos(state.selectedPatientId);
-        } else {
-            fetchPatients();
-        }
-
+        state.primaryPhotoId = state.comparePhotoIds[0] || null;
+        
+        if (state.primaryPhotoId) await updateComparisonDisplay();
+        else resetViewerToPlaceholder();
+        
+        await fetchPhotos(state.selectedPatientId);
     } catch (error) {
-        console.error("사진 삭제 중 오류 발생:", error);
-        alert("사진 삭제에 실패했습니다: " + error.message);
+        console.error("사진 삭제 중 오류:", error);
+        alert("사진 삭제에 실패했습니다.");
     }
 }
 
@@ -1270,8 +1137,7 @@ async function performRealAIAnalysis(photo) {
     const canvas = document.createElement('canvas');
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(image, 0, 0);
+    canvas.getContext('2d').drawImage(image, 0, 0);
     
     const faces = await faceLandmarksDetector.estimateFaces(canvas, { flipHorizontal: false });
     if (faces.length === 0) {
@@ -1279,112 +1145,76 @@ async function performRealAIAnalysis(photo) {
     }
     const keypoints = faces[0].keypoints;
 
-    let analysisResult = {};
     const src = cv.imread(canvas);
-
+    let analysisResult = {};
     switch (photo.mode) {
-        case 'Portrait': {
-            analysisResult.type = 'portrait';
-            const leftEyeContour = keypoints.filter(p => p.name && p.name.startsWith('leftEye'));
-            const rightEyeContour = keypoints.filter(p => p.name && p.name.startsWith('rightEye'));
-            const wrinkleScore = analyzeWrinkles(src, [...leftEyeContour, ...rightEyeContour]);
-            analysisResult.wrinkles = wrinkleScore;
-            
-            const leftCheekPoint = keypoints.find(p => p.name === 'leftCheek');
-            const rightCheekPoint = keypoints.find(p => p.name === 'rightCheek');
-            const spotScore = analyzeSpots(src, [leftCheekPoint, rightCheekPoint]);
-            analysisResult.spots = spotScore;
-
-            analysisResult.pores = Math.floor(Math.random() * 30) + 10;
+        case 'Portrait':
+            analysisResult = {
+                type: 'portrait',
+                wrinkles: analyzeWrinkles(src, keypoints.filter(p => p.name?.startsWith('leftEye') || p.name?.startsWith('rightEye'))),
+                spots: analyzeSpots(src, [keypoints.find(p => p.name === 'leftCheek'), keypoints.find(p => p.name === 'rightCheek')]),
+                pores: Math.floor(Math.random() * 30) + 10,
+            };
             break;
-        }
-        case 'F-ray': {
-            analysisResult.type = 'fray';
-            
-            const jawlinePoints = keypoints.filter(p => p.name && (p.name.startsWith('rightContour') || p.name.startsWith('leftContour')));
-            const saggingScore = analyzeSagging(jawlinePoints);
-            analysisResult.sagging = saggingScore;
-
-            analysisResult.lifting_sim = [ { x1: 200, y1: 300, x2: 400, y2: 280 }, { x1: 250, y1: 500, x2: 450, y2: 480 }];
+        case 'F-ray':
+            analysisResult = {
+                type: 'fray',
+                sagging: analyzeSagging(keypoints.filter(p => p.name?.startsWith('rightContour') || p.name?.startsWith('leftContour'))),
+            };
             break;
-        }
-        case 'UV': {
-            analysisResult.type = 'uv';
-            const leftCheekPoint = keypoints.find(p => p.name === 'leftCheek');
-            const rightCheekPoint = keypoints.find(p => p.name === 'rightCheek');
-            const pigmentationScore = analyzeSpots(src, [leftCheekPoint, rightCheekPoint], 100);
-            analysisResult.pigmentation = pigmentationScore;
-            analysisResult.sebum = Math.floor(Math.random() * 100);
+        case 'UV':
+            analysisResult = {
+                type: 'uv',
+                pigmentation: analyzeSpots(src, [keypoints.find(p => p.name === 'leftCheek'), keypoints.find(p => p.name === 'rightCheek')], 100),
+                sebum: Math.floor(Math.random() * 100),
+            };
             break;
-        }
         default:
             analysisResult = { type: 'general', message: '이 모드에 대한 특정 분석이 없습니다.' };
     }
-    
     src.delete();
     return analysisResult;
 }
 
 function analyzeWrinkles(src, eyePoints) {
     if (eyePoints.length === 0) return 0;
-    
-    const xCoords = eyePoints.map(p => p.x);
-    const yCoords = eyePoints.map(p => p.y);
-    const minX = Math.min(...xCoords) - 20;
-    const minY = Math.min(...yCoords) - 20;
-    const maxX = Math.max(...xCoords) + 20;
-    const maxY = Math.max(...yCoords) + 20;
-
-    const rect = new cv.Rect(minX, minY, maxX - minX, maxY - minY);
+    const x = eyePoints.map(p => p.x);
+    const y = eyePoints.map(p => p.y);
+    const rect = new cv.Rect(Math.min(...x) - 20, Math.min(...y) - 20, Math.max(...x) - Math.min(...x) + 40, Math.max(...y) - Math.min(...y) + 40);
     const roi = src.roi(rect);
     const gray = new cv.Mat();
-    cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY, 0);
-    
+    cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY);
     const edges = new cv.Mat();
-    cv.Canny(gray, edges, 50, 100, 3, false);
-    
-    const wrinkleScore = cv.countNonZero(edges);
-    
+    cv.Canny(gray, edges, 50, 100);
+    const score = cv.countNonZero(edges);
     roi.delete(); gray.delete(); edges.delete();
-    return Math.floor(wrinkleScore / 50);
+    return Math.floor(score / 50);
 }
 
 function analyzeSpots(src, cheekPoints, thresholdValue = 120) {
-    if (cheekPoints.length === 0 || !cheekPoints[0] || !cheekPoints[1]) return 0;
-    
-    let totalSpots = 0;
-    cheekPoints.forEach(point => {
+    if (cheekPoints.some(p => !p)) return 0;
+    return cheekPoints.reduce((total, point) => {
         const rect = new cv.Rect(point.x - 40, point.y - 40, 80, 80);
         const roi = src.roi(rect);
         const gray = new cv.Mat();
-        cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY, 0);
-
+        cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY);
         const thresholded = new cv.Mat();
         cv.threshold(gray, thresholded, thresholdValue, 255, cv.THRESH_BINARY_INV);
-
         const contours = new cv.MatVector();
         const hierarchy = new cv.Mat();
         cv.findContours(thresholded, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
-        
-        totalSpots += contours.size();
-        
+        const count = contours.size();
         roi.delete(); gray.delete(); thresholded.delete(); contours.delete(); hierarchy.delete();
-    });
-
-    return totalSpots;
+        return total + count;
+    }, 0);
 }
 
 function analyzeSagging(jawlinePoints) {
     if (jawlinePoints.length < 5) return 50;
-
-    const chinPoint = jawlinePoints.reduce((prev, curr) => (prev.y > curr.y) ? prev : curr);
+    const chinPoint = jawlinePoints.reduce((a, b) => a.y > b.y ? a : b);
     const upperJawPoints = jawlinePoints.filter(p => p.y < chinPoint.y - 20);
-    
     if (upperJawPoints.length < 2) return 50;
-
     const avgY = upperJawPoints.reduce((sum, p) => sum + p.y, 0) / upperJawPoints.length;
-    const saggingIndex = (avgY / chinPoint.y) * 100;
-    
-    let score = Math.min(100, Math.max(0, (saggingIndex - 80) * 5));
-    return Math.floor(score);
+    const score = Math.floor(Math.min(100, Math.max(0, (avgY / chinPoint.y - 0.8) * 500)));
+    return score;
 }
