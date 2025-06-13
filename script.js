@@ -59,7 +59,7 @@ let faceLandmarksDetector = null;
 let isOpenCvReady = false;
 
 // OpenCV.js가 로딩되면 호출될 전역 함수
-function onOpenCvReady() {
+window.onOpenCvReady = function() {
     console.log("OpenCV.js is ready.");
     isOpenCvReady = true;
     checkAndHideLoadingOverlay();
