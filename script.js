@@ -1,12 +1,9 @@
 // Firebase SDK를 웹사이트로 불러오는 부분입니다.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-// getDoc, doc을 추가하여 Firestore 문서 직접 참조 및 가져오기 기능을 포함합니다.
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, documentId, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-// Storage 관련 SDK를 불러옵니다.
 import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
-
-// 여러분이 알려주신 Firebase 프로젝트 설정 정보입니다.
+// Firebase 프로젝트 설정 정보입니다.
 const firebaseConfig = {
    apiKey: "AIzaSyB4GGKFIox_Wl2mXkG5cSkuHdEcsHgfuNU", // 여러분의 실제 API 키로 변경하세요.
   authDomain: "frayviewer-63e13.firebaseapp.com", // 여러분의 실제 Auth Domain으로 변경하세요.
@@ -17,13 +14,12 @@ const firebaseConfig = {
   measurementId: "G-2F5YC8ME05" // 여러분의 실제 Measurement ID로 변경하세요.
 };
 
-// Firebase 앱을 초기화하고 Storage 서비스에 연결합니다.
+// Firebase 앱 초기화
 const app = initializeApp(firebaseConfig);
 const storage = getStorage(app);
-// Firestore 데이터베이스 서비스에 연결합니다.
 const db = getFirestore(app);
 
-// state: 웹사이트의 현재 상태를 저장하는 변수들입니다.
+// state 변수들
 const state = {
     selectedPatientId: null,
     primaryPhotoId: null,
@@ -53,17 +49,18 @@ const state = {
     stagedPhoto: null,
 };
 
-
 // AI 분석 관련 전역 변수
 let faceLandmarksDetector = null;
 let isOpenCvReady = false;
 
-// OpenCV.js가 로딩되면 호출될 전역 함수 (수정된 부분)
+// ================== [코드 수정] 함수를 window 객체에 할당 ==================
+// OpenCV.js가 로딩되면 호출될 전역 함수
 window.onOpenCvReady = function() {
     console.log("OpenCV.js is ready.");
     isOpenCvReady = true;
     checkAndHideLoadingOverlay();
 }
+// ====================================================================
 
 // AI 모델 로딩 함수
 async function loadFaceDetector() {
@@ -89,6 +86,7 @@ async function loadFaceDetector() {
 
 // 모든 모델 로딩이 완료되었는지 확인하고 오버레이 및 버튼 상태 변경
 function checkAndHideLoadingOverlay() {
+    // 두 모델이 모두 준비되었을 때만 실행
     if (isOpenCvReady && faceLandmarksDetector) {
         document.getElementById('loadingOverlay').classList.replace('flex', 'hidden');
         console.log("All AI models are ready.");
@@ -110,8 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFaceDetector();
 });
 
+// ... 이하 모든 함수는 이전과 동일합니다 ...
 function setupEventListeners() {
-    // ... (이하 모든 함수는 이전과 동일)
     console.log('setupEventListeners 함수 호출됨.');
     const patientSearch = document.getElementById('patientSearch');
     patientSearch.addEventListener('input', (e) => {
