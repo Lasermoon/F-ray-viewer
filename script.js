@@ -1,4 +1,4 @@
-// Firebase SDK를 웹사이트로 불러오는 부분입니다.
+// Firebase SDK 및 설정, state 변수는 그대로 유지
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
@@ -467,7 +467,6 @@ async function selectPhoto(photoId) {
     fetchPhotos(state.selectedPatientId);
 }
 
-// **[수정됨]** `renderAnalysis` 함수에 분석 결과 시각화(주름 그리기) 로직 추가
 function renderAnalysis(photo) {
     const contentEl = document.getElementById('analysisContent');
     const canvas = document.getElementById('analysisCanvas');
@@ -483,7 +482,6 @@ function renderAnalysis(photo) {
         let html = '';
         const analysis = photo?.ai_analysis;
         if (analysis?.type) {
-            // 텍스트 결과 표시
             switch (analysis.type) {
                 case 'error':
                     html = `<p class='text-red-500'>${analysis.message}</p>`;
@@ -512,21 +510,16 @@ function renderAnalysis(photo) {
                 default:
                     html = "<p class='text-gray-500'>이 사진에 대한 AI 분석 정보가 없습니다.</p>";
             }
-            // 캔버스에 시각화 결과 그리기
             if (analysis.wrinkles && analysis.wrinkles.contours) {
-                ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; // 붉은색
-                ctx.lineWidth = Math.max(1, canvas.width / 500); // 이미지 크기에 비례하는 선 굵기
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+                ctx.lineWidth = Math.max(1, canvas.width / 500);
                 
                 analysis.wrinkles.contours.forEach(contour => {
                     ctx.beginPath();
-                    for (let i = 0; i < contour.length; i++) {
-                        const p = contour[i];
-                        if (i === 0) {
-                            ctx.moveTo(p.x, p.y);
-                        } else {
-                            ctx.lineTo(p.x, p.y);
-                        }
-                    }
+                    contour.forEach((p, i) => {
+                        if (i === 0) ctx.moveTo(p.x, p.y);
+                        else ctx.lineTo(p.x, p.y);
+                    });
                     ctx.stroke();
                 });
             }
@@ -537,14 +530,10 @@ function renderAnalysis(photo) {
         contentEl.innerHTML = html;
     };
     
-    if (img.complete) {
-        render();
-    } else {
-        img.onload = render;
-    }
-    // 창 크기가 변경될 때도 다시 그리도록 이벤트 리스너 추가
-    window.addEventListener('resize', render, { once: true });
+    if (img.complete) render();
+    else img.onload = render;
 }
+
 
 function clearAnalysis() {
     const canvas = document.getElementById('analysisCanvas');
@@ -891,7 +880,6 @@ async function deletePhoto(photoId) {
     }
 }
 
-// **[수정됨]** `performRealAIAnalysis` 함수가 세분화된 주름 분석을 호출하도록 변경
 async function performRealAIAnalysis(photo) {
     if (!faceLandmarksDetector || !isOpenCvReady) {
         throw new Error("AI 모델이 아직 준비되지 않았습니다.");
@@ -922,21 +910,21 @@ async function performRealAIAnalysis(photo) {
         case 'Portrait':
             analysisResult = {
                 type: 'portrait',
-                wrinkles: analyzeAllWrinkleAreas(src, keypoints), // 세분화된 주름 분석 함수 호출
-                spots: analyzeSpots(src, [keypoints.find(p => p.name === 'leftCheek'), keypoints.find(p => p.name === 'rightCheek')]),
+                wrinkles: analyzeAllWrinkleAreas(src, keypoints),
+                spots: analyzeSpots(src, keypoints),
                 pores: Math.floor(Math.random() * 30) + 10,
             };
             break;
         case 'F-ray':
             analysisResult = {
                 type: 'fray',
-                sagging: analyzeSagging(keypoints.filter(p => p.name?.startsWith('rightContour') || p.name?.startsWith('leftContour'))),
+                sagging: analyzeSagging(keypoints),
             };
             break;
         case 'UV':
             analysisResult = {
                 type: 'uv',
-                pigmentation: analyzeSpots(src, [keypoints.find(p => p.name === 'leftCheek'), keypoints.find(p => p.name === 'rightCheek')], 100),
+                pigmentation: analyzeSpots(src, keypoints, 100),
                 sebum: Math.floor(Math.random() * 100),
             };
             break;
@@ -947,16 +935,15 @@ async function performRealAIAnalysis(photo) {
     return analysisResult;
 }
 
-// **[추가됨]** 엣지 검출을 위한 범용 헬퍼 함수
 function detectEdgesInRoi(src, rect) {
-    if (!rect) return { score: 0, contours: [] };
+    if (!rect || rect.width <= 0 || rect.height <= 0) return { score: 0, contours: [] };
     const roi = src.roi(rect);
     const gray = new cv.Mat();
     cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY, 0);
     cv.GaussianBlur(gray, gray, {width: 3, height: 3}, 0, 0, cv.BORDER_DEFAULT);
 
     const edges = new cv.Mat();
-    cv.Canny(gray, edges, 60, 120, 3, false);
+    cv.Canny(gray, edges, 50, 150, 3, false);
 
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
@@ -966,77 +953,85 @@ function detectEdgesInRoi(src, rect) {
     let contourPoints = [];
     for (let i = 0; i < contours.size(); ++i) {
         const contour = contours.get(i);
-        totalScore += contour.data32S.length / 2; // 각 컨투어의 길이(포인트 수)
-        
-        let points = [];
-        for (let j = 0; j < contour.data32S.length; j += 2) {
-            points.push({ x: contour.data32S[j] + rect.x, y: contour.data32S[j+1] + rect.y });
+        const length = cv.arcLength(contour, false);
+        if (length > 5) { // 너무 짧은 엣지는 노이즈로 간주하고 무시
+            totalScore += length;
+            
+            let points = [];
+            for (let j = 0; j < contour.data32S.length; j += 2) {
+                points.push({ x: contour.data32S[j] + rect.x, y: contour.data32S[j+1] + rect.y });
+            }
+            contourPoints.push(points);
         }
-        contourPoints.push(points);
     }
 
     roi.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete();
     return { score: Math.floor(totalScore), contours: contourPoints };
 }
 
-// **[추가됨]** 주름 분석 영역(ROI) 정의 함수들
+// **[수정됨]** 랜드마크 '인덱스'를 사용하여 ROI를 계산하도록 함수들을 모두 수정
 function getRoiForCrowsFeet(keypoints) {
-    const leftEyeOuterCorner = keypoints.find(p => p.name === 'leftEyeUpper0').x > keypoints.find(p => p.name === 'leftEyeLower0').x ? keypoints.find(p => p.name === 'leftEyeUpper0') : keypoints.find(p => p.name === 'leftEyeLower0');
-    const rightEyeOuterCorner = keypoints.find(p => p.name === 'rightEyeUpper0').x < keypoints.find(p => p.name === 'rightEyeLower0').x ? keypoints.find(p => p.name === 'rightEyeUpper0') : keypoints.find(p => p.name === 'rightEyeLower0');
-    
-    const eyeHeight = Math.abs(keypoints.find(p => p.name === 'leftEyeUpper2').y - keypoints.find(p => p.name === 'leftEyeLower2').y);
-    const roiWidth = eyeHeight * 1.5;
+    const leftEyeOuterCorner = keypoints[130]; // 왼쪽 눈 바깥쪽
+    const rightEyeOuterCorner = keypoints[359]; // 오른쪽 눈 바깥쪽
+    const leftEyeInnerCorner = keypoints[133]; // 왼쪽 눈 안쪽
+    const rightEyeInnerCorner = keypoints[362]; // 오른쪽 눈 안쪽
 
-    const leftRoi = new cv.Rect(leftEyeOuterCorner.x - roiWidth, leftEyeOuterCorner.y - eyeHeight / 2, roiWidth, eyeHeight);
-    const rightRoi = new cv.Rect(rightEyeOuterCorner.x, rightEyeOuterCorner.y - eyeHeight / 2, roiWidth, eyeHeight);
+    if (!leftEyeOuterCorner || !rightEyeOuterCorner || !leftEyeInnerCorner || !rightEyeInnerCorner) return null;
+
+    const eyeWidth = Math.abs(leftEyeOuterCorner.x - leftEyeInnerCorner.x);
+    const roiWidth = eyeWidth * 0.6;
+    const roiHeight = eyeWidth * 0.5;
+
+    const leftRoi = new cv.Rect(leftEyeOuterCorner.x, leftEyeOuterCorner.y - roiHeight / 2, roiWidth, roiHeight);
+    const rightRoi = new cv.Rect(rightEyeOuterCorner.x - roiWidth, rightEyeOuterCorner.y - roiHeight / 2, roiWidth, roiHeight);
 
     return { left: leftRoi, right: rightRoi };
 }
 
 function getRoiForForehead(keypoints) {
-    const leftEyebrow = keypoints.find(p => p.name === 'leftEyebrowUpper');
-    const rightEyebrow = keypoints.find(p => p.name === 'rightEyebrowUpper');
-    
-    if(!leftEyebrow || !rightEyebrow) return null;
+    const leftEyebrow = keypoints[105]; // 왼쪽 눈썹 위
+    const rightEyebrow = keypoints[334]; // 오른쪽 눈썹 위
+    const foreheadTop = keypoints[10]; // 이마 상단 중앙
 
-    const eyeDistance = Math.abs(rightEyebrow.x - leftEyebrow.x);
-    const foreheadHeight = eyeDistance * 0.4;
+    if(!leftEyebrow || !rightEyebrow || !foreheadTop) return null;
+
+    const foreheadHeight = Math.abs(leftEyebrow.y - foreheadTop.y) * 0.8;
     
     return new cv.Rect(
         leftEyebrow.x,
-        leftEyebrow.y - foreheadHeight * 1.2,
-        eyeDistance,
+        foreheadTop.y,
+        rightEyebrow.x - leftEyebrow.x,
         foreheadHeight
     );
 }
 
 function getRoiForNasolabial(keypoints) {
-    const noseBottom = keypoints.find(p => p.name === 'noseTip');
-    const mouthLeft = keypoints.find(p => p.name === 'mouthLeft');
-    const mouthRight = keypoints.find(p => p.name === 'mouthRight');
+    const noseLeft = keypoints[129]; // 왼쪽 콧볼
+    const noseRight = keypoints[358]; // 오른쪽 콧볼
+    const mouthLeft = keypoints[61]; // 왼쪽 입꼬리
+    const mouthRight = keypoints[291]; // 오른쪽 입꼬리
 
-    if(!noseBottom || !mouthLeft || !mouthRight) return null;
+    if(!noseLeft || !noseRight || !mouthLeft || !mouthRight) return null;
     
-    const width = Math.abs(mouthRight.x - mouthLeft.x) * 0.3;
-    const height = Math.abs(noseBottom.y - mouthLeft.y);
+    const width = Math.abs(mouthLeft.x - noseLeft.x);
+    const height = Math.abs(mouthLeft.y - noseLeft.y);
 
-    const leftRoi = new cv.Rect(mouthLeft.x - width, noseBottom.y - height, width, height);
-    const rightRoi = new cv.Rect(mouthRight.x, noseBottom.y - height, width, height);
+    const leftRoi = new cv.Rect(noseLeft.x, noseLeft.y, width, height);
+    const rightRoi = new cv.Rect(mouthRight.x - width, noseRight.y, width, height);
     
     return { left: leftRoi, right: rightRoi };
 }
 
-// **[수정됨]** 기존 `analyzeWrinkles` 함수를 세분화된 분석을 총괄하는 함수로 변경
 function analyzeAllWrinkleAreas(src, keypoints) {
     const crowsFeetRois = getRoiForCrowsFeet(keypoints);
     const foreheadRoi = getRoiForForehead(keypoints);
     const nasolabialRois = getRoiForNasolabial(keypoints);
     
-    const crowsFeetLeftResult = detectEdgesInRoi(src, crowsFeetRois.left);
-    const crowsFeetRightResult = detectEdgesInRoi(src, crowsFeetRois.right);
+    const crowsFeetLeftResult = crowsFeetRois ? detectEdgesInRoi(src, crowsFeetRois.left) : {score:0, contours:[]};
+    const crowsFeetRightResult = crowsFeetRois ? detectEdgesInRoi(src, crowsFeetRois.right) : {score:0, contours:[]};
     const foreheadResult = detectEdgesInRoi(src, foreheadRoi);
-    const nasolabialLeftResult = detectEdgesInRoi(src, nasolabialRois.left);
-    const nasolabialRightResult = detectEdgesInRoi(src, nasolabialRois.right);
+    const nasolabialLeftResult = nasolabialRois ? detectEdgesInRoi(src, nasolabialRois.left) : {score:0, contours:[]};
+    const nasolabialRightResult = nasolabialRois ? detectEdgesInRoi(src, nasolabialRois.right) : {score:0, contours:[]};
 
     const crowsFeetScore = crowsFeetLeftResult.score + crowsFeetRightResult.score;
     const foreheadScore = foreheadResult.score;
@@ -1057,9 +1052,13 @@ function analyzeAllWrinkleAreas(src, keypoints) {
     };
 }
 
-
-function analyzeSpots(src, cheekPoints, thresholdValue = 120) {
+function analyzeSpots(src, keypoints, thresholdValue = 120) {
+    const leftCheekPoint = keypoints[118]; // 왼쪽 뺨
+    const rightCheekPoint = keypoints[347]; // 오른쪽 뺨
+    const cheekPoints = [leftCheekPoint, rightCheekPoint];
+    
     if (cheekPoints.some(p => !p)) return 0;
+
     return cheekPoints.reduce((total, point) => {
         const rect = new cv.Rect(point.x - 40, point.y - 40, 80, 80);
         const roi = src.roi(rect);
@@ -1076,12 +1075,17 @@ function analyzeSpots(src, cheekPoints, thresholdValue = 120) {
     }, 0);
 }
 
-function analyzeSagging(jawlinePoints) {
-    if (jawlinePoints.length < 5) return 50;
-    const chinPoint = jawlinePoints.reduce((a, b) => a.y > b.y ? a : b);
-    const upperJawPoints = jawlinePoints.filter(p => p.y < chinPoint.y - 20);
-    if (upperJawPoints.length < 2) return 50;
-    const avgY = upperJawPoints.reduce((sum, p) => sum + p.y, 0) / upperJawPoints.length;
-    const score = Math.floor(Math.min(100, Math.max(0, (avgY / chinPoint.y - 0.8) * 500)));
+function analyzeSagging(keypoints) {
+    const chinPoint = keypoints[152]; // 턱 끝 중앙
+    const leftJaw = keypoints[172]; // 왼쪽 턱
+    const rightJaw = keypoints[397]; // 오른쪽 턱
+
+    if (!chinPoint || !leftJaw || !rightJaw) return 50;
+    
+    // 턱선 중앙점들의 평균 높이와 턱끝 높이를 비교
+    const jawCenterY = (leftJaw.y + rightJaw.y) / 2;
+    const saggingIndex = chinPoint.y - jawCenterY;
+
+    let score = Math.floor(Math.min(100, Math.max(0, saggingIndex * 2))); // 점수화
     return score;
 }
